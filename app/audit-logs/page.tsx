@@ -135,7 +135,7 @@ export default function AuditLogsPage() {
   //   { href: '/dashboard', icon: '/icons/menu.svg', label: 'Dashboard' },
   // ]
 
-  const transactionTypes = ['adjustment', 'sale', 'production', 'transfer', 'restock', 'initial']
+  const transactionTypes = ['adjustment', 'sale', 'production', 'transfer', 'restock', 'initial', 'pullout', 'oth']
 
   function getTypeBadge(type: string) {
     const map: Record<string, string> = {
@@ -145,6 +145,8 @@ export default function AuditLogsPage() {
       transfer:   '#8B5CF6',
       restock:    '#F5A623',
       initial:    '#6B7280',
+      pullout:    '#EF4444',
+      oth:        '#7C3AED',
     }
     return (
       <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize" style={{ backgroundColor: map[type] || '#6B7280' }}>

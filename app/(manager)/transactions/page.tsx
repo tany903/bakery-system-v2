@@ -71,7 +71,22 @@ interface CashEntry {
   profiles: { full_name: string } | null
 }
 
-type Tab = 'sales' | 'transfers' | 'production'
+interface Disposal {
+  id: string
+  product_id: string
+  type: 'pullout' | 'oth'
+  reason: string
+  quantity: number
+  location: 'shop' | 'production'
+  created_at: string
+  is_voided: boolean
+  voided_at: string | null
+  void_reason: string | null
+  products: { name: string } | null
+  profiles: { full_name: string } | null
+}
+
+type Tab = 'sales' | 'transfers' | 'production' | 'disposals'
 
 // ─── Void Modal ───────────────────────────────────────────────────────────────
 
@@ -103,7 +118,7 @@ function VoidModal({
             onChange={e => setReason(e.target.value)}
             placeholder="Enter reason for voiding..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 resize-none text-gray-900"
+            className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 resize-none"
           />
           <div className="flex gap-3 mt-4">
             <button onClick={onCancel} disabled={loading}
@@ -171,6 +186,7 @@ export default function TransactionsPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [production, setProduction] = useState<ProductionRecord[]>([])
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
+  const [disposals, setDisposals] = useState<Disposal[]>([])
 
   // Sales filters
   const [saleSearch, setSaleSearch] = useState('')
@@ -194,7 +210,15 @@ export default function TransactionsPage() {
   const [productionDateTo, setProductionDateTo] = useState('')
   const [productionPage, setProductionPage] = useState(1)
 
-  const [voidTarget, setVoidTarget] = useState<{ type: 'sale' | 'transfer' | 'production' | 'cash'; id: string; label: string } | null>(null)
+  // Disposal filters
+  const [disposalSearch, setDisposalSearch] = useState('')
+  const [disposalType, setDisposalType] = useState('all')
+  const [disposalStatus, setDisposalStatus] = useState('all')
+  const [disposalDateFrom, setDisposalDateFrom] = useState('')
+  const [disposalDateTo, setDisposalDateTo] = useState('')
+  const [disposalPage, setDisposalPage] = useState(1)
+
+  const [voidTarget, setVoidTarget] = useState<{ type: 'sale' | 'transfer' | 'production' | 'cash' | 'disposal'; id: string; label: string } | null>(null)
   const [voidLoading, setVoidLoading] = useState(false)
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
 
@@ -213,7 +237,7 @@ export default function TransactionsPage() {
   }
 
   async function loadAll() {
-    await Promise.all([loadSales(), loadTransfers(), loadProduction(), loadCashEntries()])
+    await Promise.all([loadSales(), loadTransfers(), loadProduction(), loadCashEntries(), loadDisposals()])
   }
 
   async function loadSales() {
@@ -246,6 +270,16 @@ export default function TransactionsPage() {
     if (data) setProduction(data)
   }
 
+  async function loadDisposals() {
+    const { data, error: err } = await supabase
+      .from('stock_disposals')
+      .select('*, products(name), profiles!stock_disposals_performed_by_fkey(full_name)')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (err) console.error('loadDisposals error:', err)
+    if (data) setDisposals(data)
+  }
+
   async function loadCashEntries() {
     const { data, error: err } = await supabase
       .from('cash_register')
@@ -267,12 +301,14 @@ export default function TransactionsPage() {
         transfer: '/api/transactions/void-transfer',
         production: '/api/transactions/void-production',
         cash: '/api/transactions/void-cash-entry',
+        disposal: '/api/transactions/void-disposal',
       }
       const bodyMap: Record<string, object> = {
         sale: { saleId: voidTarget.id, voidReason: reason, managerId },
         transfer: { transferId: voidTarget.id, voidReason: reason, managerId },
         production: { productionId: voidTarget.id, voidReason: reason, managerId },
         cash: { entryId: voidTarget.id, voidReason: reason, managerId },
+        disposal: { disposalId: voidTarget.id, voidReason: reason, managerId },
       }
       const res = await fetch(endpointMap[voidTarget.type], {
         method: 'POST',
@@ -325,9 +361,20 @@ export default function TransactionsPage() {
     return true
   })
 
+  const filteredDisposals = disposals.filter(d => {
+    if (disposalSearch && !d.products?.name?.toLowerCase().includes(disposalSearch.toLowerCase())) return false
+    if (disposalType !== 'all' && d.type !== disposalType) return false
+    if (disposalStatus === 'active' && d.is_voided) return false
+    if (disposalStatus === 'voided' && !d.is_voided) return false
+    if (disposalDateFrom && new Date(d.created_at) < new Date(disposalDateFrom)) return false
+    if (disposalDateTo) { const dt = new Date(disposalDateTo); dt.setHours(23,59,59,999); if (new Date(d.created_at) > dt) return false }
+    return true
+  })
+
   const paginatedSales = filteredSales.slice((salePage-1)*PER_PAGE, salePage*PER_PAGE)
   const paginatedTransfers = filteredTransfers.slice((transferPage-1)*PER_PAGE, transferPage*PER_PAGE)
   const paginatedProduction = filteredProduction.slice((productionPage-1)*PER_PAGE, productionPage*PER_PAGE)
+  const paginatedDisposals = filteredDisposals.slice((disposalPage-1)*PER_PAGE, disposalPage*PER_PAGE)
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -362,6 +409,7 @@ export default function TransactionsPage() {
     { key: 'sales',      label: 'Sales',              icon: '🧾', count: sales.length },
     { key: 'transfers',  label: 'Stock Transfers',     icon: '📦', count: transfers.length },
     { key: 'production', label: 'Production Records',  icon: '🏭', count: production.length },
+    { key: 'disposals',  label: 'Disposals',           icon: '🗑️', count: disposals.length },
   ]
 
   return (
@@ -444,12 +492,12 @@ export default function TransactionsPage() {
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Search</label>
                   <input value={saleSearch} onChange={e => { setSaleSearch(e.target.value); setSalePage(1) }}
                     placeholder="Sale # or cashier…"
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Payment</label>
                   <select value={salePayment} onChange={e => { setSalePayment(e.target.value); setSalePage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
                     <option value="all">All</option>
                     <option value="cash">Cash</option>
                     <option value="online">Online</option>
@@ -458,7 +506,7 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
                   <select value={saleStatus} onChange={e => { setSaleStatus(e.target.value); setSalePage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="voided">Voided</option>
@@ -467,12 +515,12 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
                   <input type="date" value={saleDateFrom} onChange={e => { setSaleDateFrom(e.target.value); setSalePage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
                   <input type="date" value={saleDateTo} onChange={e => { setSaleDateTo(e.target.value); setSalePage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
               </div>
 
@@ -676,12 +724,12 @@ export default function TransactionsPage() {
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Search Product</label>
                   <input value={transferSearch} onChange={e => { setTransferSearch(e.target.value); setTransferPage(1) }}
                     placeholder="Product name…"
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
                   <select value={transferStatus} onChange={e => { setTransferStatus(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="voided">Voided</option>
@@ -690,12 +738,12 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
                   <input type="date" value={transferDateFrom} onChange={e => { setTransferDateFrom(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
                   <input type="date" value={transferDateTo} onChange={e => { setTransferDateTo(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
               </div>
 
@@ -784,12 +832,12 @@ export default function TransactionsPage() {
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Search Product</label>
                   <input value={productionSearch} onChange={e => { setProductionSearch(e.target.value); setProductionPage(1) }}
                     placeholder="Product name…"
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
                   <select value={productionStatus} onChange={e => { setProductionStatus(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="voided">Voided</option>
@@ -798,12 +846,12 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
                   <input type="date" value={productionDateFrom} onChange={e => { setProductionDateFrom(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
                   <input type="date" value={productionDateTo} onChange={e => { setProductionDateTo(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
                 </div>
               </div>
 
@@ -870,6 +918,130 @@ export default function TransactionsPage() {
                       </table>
                     </div>
                     <Pagination current={productionPage} total={Math.ceil(filteredProduction.length/PER_PAGE)} onChange={setProductionPage} />
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: DISPOSALS ─────────────────────────────────────────────────── */}
+          {activeTab === 'disposals' && (
+            <div>
+              <div className="bg-white rounded-sm p-4 mb-4 grid grid-cols-2 lg:grid-cols-5 gap-3"
+                style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+                <div className="lg:col-span-2">
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Search Product</label>
+                  <input value={disposalSearch} onChange={e => { setDisposalSearch(e.target.value); setDisposalPage(1) }}
+                    placeholder="Product name…"
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Type</label>
+                  <select value={disposalType} onChange={e => { setDisposalType(e.target.value); setDisposalPage(1) }}
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    <option value="all">All</option>
+                    <option value="pullout">Pull-out</option>
+                    <option value="oth">OTH</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
+                  <select value={disposalStatus} onChange={e => { setDisposalStatus(e.target.value); setDisposalPage(1) }}
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="voided">Voided</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
+                  <input type="date" value={disposalDateFrom} onChange={e => { setDisposalDateFrom(e.target.value); setDisposalPage(1) }}
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
+                  <input type="date" value={disposalDateTo} onChange={e => { setDisposalDateTo(e.target.value); setDisposalPage(1) }}
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
+                </div>
+              </div>
+
+              <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                  <span className="text-white">🗑️</span>
+                  <h2 className="font-bold text-white">Disposals</h2>
+                  <span className="text-xs text-white opacity-60 ml-1">(Pull-outs & OTH)</span>
+                  <span className="ml-auto text-xs text-white opacity-60">{filteredDisposals.length} records</span>
+                </div>
+                {filteredDisposals.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16">
+                    <div className="text-5xl mb-3">🗑️</div>
+                    <p className="text-lg font-bold text-gray-600">No disposals found</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                            <th className="px-5 py-3 font-semibold">Date & Time</th>
+                            <th className="px-5 py-3 font-semibold">Product</th>
+                            <th className="px-5 py-3 font-semibold">Type</th>
+                            <th className="px-5 py-3 font-semibold">Reason</th>
+                            <th className="px-5 py-3 font-semibold">Qty</th>
+                            <th className="px-5 py-3 font-semibold">Location</th>
+                            <th className="px-5 py-3 font-semibold">By</th>
+                            <th className="px-5 py-3 font-semibold">Status</th>
+                            <th className="px-5 py-3 font-semibold">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedDisposals.map(d => (
+                            <tr key={d.id}
+                              className={`border-b border-gray-100 last:border-0 transition-colors ${d.is_voided ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                              <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(d.created_at)}</td>
+                              <td className={`px-5 py-3 text-sm font-semibold ${d.is_voided ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                                {d.products?.name || '—'}
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                                  style={{ backgroundColor: d.type === 'pullout' ? '#EF4444' : '#7C3AED' }}>
+                                  {d.type === 'pullout' ? 'Pull-out' : 'OTH'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3 text-xs text-gray-500 max-w-xs truncate">{d.reason}</td>
+                              <td className={`px-5 py-3 text-sm font-black ${d.is_voided ? 'line-through text-gray-400' : 'text-red-500'}`}>
+                                -{d.quantity} pcs
+                              </td>
+                              <td className="px-5 py-3">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${d.location === 'shop' ? 'bg-blue-400' : 'bg-green-500'}`}>
+                                  {d.location}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3 text-xs text-gray-500">{d.profiles?.full_name || '—'}</td>
+                              <td className="px-5 py-3">
+                                {d.is_voided ? (
+                                  <div>
+                                    <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">VOIDED</span>
+                                    {d.void_reason && <p className="text-xs text-red-400 mt-1 truncate max-w-xs">{d.void_reason}</p>}
+                                  </div>
+                                ) : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Active</span>}
+                              </td>
+                              <td className="px-5 py-3">
+                                {!d.is_voided && (
+                                  <button
+                                    onClick={() => setVoidTarget({ type: 'disposal', id: d.id, label: `${d.type === 'pullout' ? 'Pull-out' : 'OTH'} of ${d.quantity} × ${d.products?.name || 'product'}` })}
+                                    className="text-xs font-bold px-3 py-1 rounded-sm text-white hover:opacity-80"
+                                    style={{ backgroundColor: '#7B1111' }}>
+                                    Void
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Pagination current={disposalPage} total={Math.ceil(filteredDisposals.length/PER_PAGE)} onChange={setDisposalPage} />
                   </>
                 )}
               </div>
