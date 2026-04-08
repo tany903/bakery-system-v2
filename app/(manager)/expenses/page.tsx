@@ -520,7 +520,7 @@ export default function ExpensesPage() {
               <div><label className={labelClass}>Description (optional)</label><input type="text" value={newCategoryDesc} onChange={e => setNewCategoryDesc(e.target.value)} className={inputClass} placeholder="Brief description..." /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>{submitting ? 'Adding...' : 'Add Category'}</button>
-                <button type="button" onClick={() => setShowAddCategoryModal(false)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => setShowAddCategoryModal(false)} className="px-5 py-2 rounded-sm border border-gray-300 text-sm font-semibold hover:bg-gray-100 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
