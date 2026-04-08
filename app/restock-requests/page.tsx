@@ -702,7 +702,7 @@ export default function RestockRequestsPage() {
               {submitting ? 'Creating...' : `Create Request (${newItems.filter(i => i.product_id && parseInt(i.requested_quantity) > 0).length} product${newItems.filter(i => i.product_id).length !== 1 ? 's' : ''})`}
             </button>
             <button type="button" onClick={() => setShowNewRequestModal(false)}
-              className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+              className="px-5 py-2 rounded-sm border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-100">
               Cancel
             </button>
           </div>
