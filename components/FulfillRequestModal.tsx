@@ -120,7 +120,7 @@ export default function FulfillRequestModal({ request, onConfirm, onClose }: Ful
             Confirm Fulfillment
           </button>
           <button onClick={onClose}
-            className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+            className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">
             Cancel
           </button>
         </div>
