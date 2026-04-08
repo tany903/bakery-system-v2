@@ -30,7 +30,13 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // const { data: { user } } = await supabase.auth.getUser()
+
+  const {
+  data: { session },
+} = await supabase.auth.getSession()
+
+const user = session?.user
 
   // If trying to access protected routes without auth, redirect to login
   if (!user && !req.nextUrl.pathname.startsWith('/login')) {
@@ -61,5 +67,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.webp|.*\\.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
 }
