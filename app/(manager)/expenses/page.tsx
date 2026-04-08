@@ -217,7 +217,7 @@ export default function ExpensesPage() {
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 
-  const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400"
+  const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
 
   if (loading) {
@@ -269,12 +269,12 @@ export default function ExpensesPage() {
 
           <div className="flex items-center gap-3 mb-5">
             <select value={filterMonth} onChange={e => setFilterMonth(parseInt(e.target.value))}
-              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white focus:outline-none"
+              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
               style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
               {monthNames.map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
             </select>
             <select value={filterYear} onChange={e => setFilterYear(parseInt(e.target.value))}
-              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white focus:outline-none"
+              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
               style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
               {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
@@ -461,7 +461,7 @@ export default function ExpensesPage() {
               <div><label className={labelClass}>Notes (optional)</label><textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} rows={3} className={inputClass} /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>{submitting ? 'Saving...' : 'Save Expense'}</button>
-                <button type="button" onClick={() => { setShowAddModal(false); resetAddForm() }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowAddModal(false); resetAddForm() }} className="px-5 py-2 rounded-sm border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-100">Cancel</button>
               </div>
             </form>
           </div>
@@ -537,7 +537,7 @@ export default function ExpensesPage() {
               <div><label className={labelClass}>Description (optional)</label><input type="text" value={editCategoryDesc} onChange={e => setEditCategoryDesc(e.target.value)} className={inputClass} /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50 bg-blue-600 hover:bg-blue-700">{submitting ? 'Updating...' : 'Update Category'}</button>
-                <button type="button" onClick={() => { setShowEditCategoryModal(false); setEditingCategory(null) }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowEditCategoryModal(false); setEditingCategory(null) }} className="px-5 py-2 rounded-sm border border-gray-300 text-sm text-gray-700 font-semibold hover:bg-gray-100">Cancel</button>
               </div>
             </form>
           </div>
