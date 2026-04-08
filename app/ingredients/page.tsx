@@ -348,7 +348,7 @@ export default function IngredientsPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>{submitting ? 'Adding...' : 'Add Ingredient'}</button>
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50"style={{ backgroundColor: '#440609' }} >Cancel</button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-5 py-2 rounded-sm border border-gray-300 text-sm font-semibold hover:bg-gray-100 text-gray-800"style={{ backgroundColor: '#440609' }} >Cancel</button>
               </div>
             </form>
           </div>
@@ -374,7 +374,7 @@ export default function IngredientsPage() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50 bg-blue-500 hover:bg-blue-600">{submitting ? 'Updating...' : 'Update Ingredient'}</button>
-                <button type="button" onClick={() => { setShowEditModal(false); setEditingIngredient(null) }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowEditModal(false); setEditingIngredient(null) }} className="px-5 py-2 rounded-sm border border-gray-300 text-gray-800 text-sm font-semibold hover:bg-gray-100">Cancel</button>
               </div>
             </form>
           </div>
@@ -393,7 +393,7 @@ export default function IngredientsPage() {
               <div><label className={labelClass}>Notes (optional)</label><textarea value={adjustNotes} onChange={e => setAdjustNotes(e.target.value)} rows={3} className={inputClass} placeholder="Reason for adjustment..." /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>{submitting ? 'Adjusting...' : 'Confirm Adjustment'}</button>
-                <button type="button" onClick={() => { setShowAdjustModal(false); setSelectedIngredient(null); setAdjustment(''); setAdjustNotes('') }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowAdjustModal(false); setSelectedIngredient(null); setAdjustment(''); setAdjustNotes('') }} className="px-5 py-2 rounded-sm border border-gray-300 text-gray-800 text-sm font-semibold hover:bg-gray-100">Cancel</button>
               </div>
             </form>
           </div>
