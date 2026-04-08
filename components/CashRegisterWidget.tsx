@@ -193,7 +193,7 @@ export default function CashRegisterWidget({ userId, userRole }: CashRegisterWid
                   {submitting ? 'Recording...' : modalType === 'cash_in' ? '+ Confirm Cash In' : '- Confirm Cash Out'}
                 </button>
                 <button type="button" onClick={() => setShowModal(false)}
-                  className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+                  className="px-5 py-2 rounded-sm border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-100">
                   Cancel
                 </button>
               </div>
