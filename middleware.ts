@@ -30,13 +30,8 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  // const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  const {
-  data: { session },
-} = await supabase.auth.getSession()
-
-const user = session?.user
 
   // If trying to access protected routes without auth, redirect to login
   if (!user && !req.nextUrl.pathname.startsWith('/login')) {
