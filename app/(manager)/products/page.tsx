@@ -388,7 +388,7 @@ export default function ProductsPage() {
                   {editingCategory ? 'Update Category' : 'Create Category'}
                 </button>
                 <button type="button" onClick={closeCategoryModal}
-                  className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+                  className="px-5 py-2 rounded-sm border border-gray-300 text-sm font-semibold hover:bg-gray-100 text-gray-800">
                   Cancel
                 </button>
               </div>

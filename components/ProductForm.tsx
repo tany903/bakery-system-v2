@@ -149,7 +149,7 @@ export default function ProductForm({ product, onSubmit, onCancel }: ProductForm
           {loading ? 'Saving...' : product ? 'Update Product' : 'Create Product'}
         </button>
         <button type="button" onClick={onCancel}
-          className="px-6 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+          className="px-6 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-800">
           Cancel
         </button>
       </div>
