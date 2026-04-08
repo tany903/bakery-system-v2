@@ -121,16 +121,17 @@ function VoidModal({
             className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 resize-none"
           />
           <div className="flex gap-3 mt-4">
-            <button onClick={onCancel} disabled={loading}
-              className="flex-1 px-4 py-2 rounded-sm text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50">
-              Cancel
-            </button>
+            
             <button
               onClick={() => reason.trim() && onConfirm(reason.trim())}
               disabled={loading || !reason.trim()}
               className="flex-1 px-4 py-2 rounded-sm text-sm font-bold text-white transition-colors disabled:opacity-50"
               style={{ backgroundColor: '#7B1111' }}>
               {loading ? 'Voiding…' : 'Confirm Void'}
+            </button>
+            <button onClick={onCancel} disabled={loading}
+              className="flex-1 px-4 py-2 rounded-sm text-sm font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors disabled:opacity-50">
+              Cancel
             </button>
           </div>
         </div>
