@@ -575,7 +575,7 @@ export default function POSPage() {
                   className="flex-1 py-2 rounded-sm font-bold text-white text-sm"
                   style={{ backgroundColor: '#1a2340' }}>Apply</button>
                 <button onClick={() => { setShowDiscountModal(false); setDiscountTargetId(null) }}
-                  className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                  className="px-5 py-2 rounded-sm border border-gray-300 text-sm text-gray-700 font-semibold hover:bg-gray-100">Cancel</button>
               </div>
             </div>
           </div>
