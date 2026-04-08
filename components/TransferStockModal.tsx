@@ -47,110 +47,95 @@ export default function TransferStockModal({
   const newProductionStock = product.production_current_stock - qty
   const newShopStock = product.shop_current_stock + qty
 
+  const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
+  const labelClass = "block text-xs font-bold text-gray-500 mb-1"
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-md w-full">
-        <h2 className="text-2xl font-bold mb-6">Transfer Stock</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-sm w-full max-w-sm" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
 
-        <div className="bg-gray-50 p-4 rounded-lg mb-6">
-          <div className="text-sm text-gray-600 mb-2">Product</div>
-          <div className="font-bold text-gray-900 mb-4">{product.name}</div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-gray-600 mb-1">🏭 Production</div>
-              <div className="text-2xl font-bold text-green-600">
-                {product.production_current_stock}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-600 mb-1">🏪 Shop</div>
-              <div className="text-2xl font-bold text-blue-600">
-                {product.shop_current_stock}
-              </div>
-            </div>
-          </div>
+        {/* Header */}
+        <div className="px-6 py-4" style={{ backgroundColor: '#220901' }}>
+          <h2 className="text-white font-black text-lg">Transfer Stock</h2>
+          <p className="text-white text-xs opacity-50 mt-0.5">{product.name} — Production → Shop</p>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Current stock display */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-sm px-4 py-3" style={{ backgroundColor: '#220901' }}>
+              <p className="text-white text-xs opacity-50">Production</p>
+              <p className="text-white font-black text-2xl">{product.production_current_stock}</p>
+            </div>
+            <div className="rounded-sm px-4 py-3" style={{ backgroundColor: '#220901' }}>
+              <p className="text-white text-xs opacity-50">Shop</p>
+              <p className="text-white font-black text-2xl">{product.shop_current_stock}</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-red-500">{error}</div>
+          )}
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quantity to Transfer
-            </label>
+            <label className={labelClass}>Quantity to Transfer *</label>
             <input
               type="number"
               min="1"
               max={product.production_current_stock}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Enter quantity"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+              placeholder={`Max: ${product.production_current_stock}`}
+              className={inputClass}
               autoFocus
             />
-            <div className="text-sm text-gray-500 mt-1">
-              Maximum: {product.production_current_stock}
-            </div>
           </div>
 
+          {/* After transfer preview */}
           {quantity && qty > 0 && qty <= product.production_current_stock && (
-            <div className="border-2 border-blue-200 p-4 rounded-lg">
-              <div className="text-sm font-medium text-gray-700 mb-3">After Transfer:</div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs text-gray-600 mb-1">🏭 Production</div>
-                  <div className="text-xl font-bold text-green-600">
-                    {newProductionStock}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    ({qty > 0 ? '-' : ''}{qty})
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-600 mb-1">🏪 Shop</div>
-                  <div className="text-xl font-bold text-blue-600">
-                    {newShopStock}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    (+{qty})
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-sm px-4 py-3" style={{ backgroundColor: '#220901' }}>
+                <p className="text-white text-xs opacity-50">Production After</p>
+                <p className={`font-black text-2xl ${newProductionStock < product.production_minimum_threshold ? 'text-red-400' : 'text-green-400'}`}>
+                  {newProductionStock}
+                </p>
+                <p className="text-white text-xs opacity-40">-{qty}</p>
+              </div>
+              <div className="rounded-sm px-4 py-3" style={{ backgroundColor: '#220901' }}>
+                <p className="text-white text-xs opacity-50">Shop After</p>
+                <p className="text-green-400 font-black text-2xl">{newShopStock}</p>
+                <p className="text-white text-xs opacity-40">+{qty}</p>
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notes (Optional)
-            </label>
+            <label className={labelClass}>Notes (Optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="Reason for transfer..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+              className={inputClass}
             />
           </div>
 
-          <div className="flex space-x-4 pt-4">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
+          <div className="flex gap-3 pt-2">
             <button
               type="submit"
               disabled={loading || !quantity || qty <= 0 || qty > product.production_current_stock}
-              className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50"
+              style={{ backgroundColor: '#10B981' }}
             >
-              {loading ? 'Transferring...' : 'Transfer'}
+              {loading ? 'Transferring...' : 'Confirm Transfer'}
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-5 py-2 rounded-sm border border-gray-300 text-gray-700 text-sm font-semibold hover:bg-gray-100"
+            >
+              Cancel
             </button>
           </div>
         </form>
