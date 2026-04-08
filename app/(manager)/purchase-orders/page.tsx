@@ -797,7 +797,7 @@ export default function PurchaseOrdersPage() {
               </div>
               <StatusBadge status={viewingPO.status} />
             </div>
-            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4 text-gray-700">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div><p className="text-xs text-gray-600 font-bold">Created</p><p className="font-semibold">{new Date(viewingPO.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>
                 {viewingPO.expected_delivery_date && <div><p className="text-xs text-gray-600 font-bold">Expected Delivery</p><p className="font-semibold">{viewingPO.expected_delivery_date}</p></div>}
@@ -830,7 +830,7 @@ export default function PurchaseOrdersPage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex justify-between font-black text-lg border-t border-gray-200 pt-3">
+              <div className="flex justify-between font-black text-lg border-t border-gray-200 text-gray-800 pt-3">
                 <span>Total</span>
                 <span>₱{Number(viewingPO.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
               </div>
