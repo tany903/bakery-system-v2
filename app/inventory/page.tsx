@@ -327,7 +327,7 @@ const productionNavLinks = [
 
   function DisposalModal() {
     const reasons = disposalType === 'pullout' ? PULLOUT_REASONS : OTH_REASONS
-    const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400"
+    const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900"
     const labelClass = "block text-xs font-bold text-gray-500 mb-1"
     if (!showDisposalModal || !disposalProduct) return null
     return (
@@ -356,7 +356,7 @@ const productionNavLinks = [
                 {disposalSubmitting ? 'Recording...' : `Confirm ${disposalType === 'pullout' ? 'Pull-out' : 'OTH'}`}
               </button>
               <button type="button" onClick={() => setShowDisposalModal(false)}
-                className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
             </div>
           </form>
         </div>
