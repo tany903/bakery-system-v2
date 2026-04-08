@@ -448,7 +448,7 @@ export default function POSPage() {
                           <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                             className="w-7 h-7 rounded-sm font-black text-sm flex items-center justify-center"
                             style={{ backgroundColor: '#F5A623', color: 'white' }}>−</button>
-                          <span className="w-8 text-center font-black text-sm">{item.quantity}</span>
+                          <span className="w-8 text-center font-black text-sm text-gray-800">{item.quantity}</span>
                           <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
                             className="w-7 h-7 rounded-sm font-black text-sm flex items-center justify-center"
                             style={{ backgroundColor: '#F5A623', color: 'white' }}>+</button>
