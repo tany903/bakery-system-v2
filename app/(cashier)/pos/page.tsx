@@ -584,8 +584,8 @@ export default function POSPage() {
 
       {/* Cash Register Slide-over */}
       {showCash && userId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-end z-50 p-4">
-          <div className="w-full max-w-md mt-16 flex flex-col gap-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md flex flex-col gap-3">
             <div className="flex justify-end">
               <button onClick={() => setShowCash(false)}
                 className="px-4 py-2 bg-white rounded-sm text-sm font-bold text-gray-700 hover:bg-gray-100"
