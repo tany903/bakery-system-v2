@@ -717,7 +717,7 @@ export default function POSPage() {
                   {restockSubmitting ? 'Submitting...' : 'Submit Request'}
                 </button>
                 <button type="button" onClick={() => setShowRestockModal(false)}
-                  className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">
+                  className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">
                   Cancel
                 </button>
               </div>
