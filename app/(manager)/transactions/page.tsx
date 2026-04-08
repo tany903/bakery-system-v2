@@ -223,7 +223,7 @@ export default function TransactionsPage() {
   const [voidLoading, setVoidLoading] = useState(false)
   const [expandedSales, setExpandedSales] = useState<Set<string>>(new Set())
 
-  const PER_PAGE = 15
+  const PER_PAGE = 10
 
   useEffect(() => { checkAuth() }, [])
 
