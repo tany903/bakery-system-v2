@@ -486,7 +486,7 @@ export default function ExpensesPage() {
               <div><label className={labelClass}>Notes (optional)</label><textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3} className={inputClass} /></div>
               <div className="flex gap-3 pt-2">
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50 bg-blue-600 hover:bg-blue-700">{submitting ? 'Updating...' : 'Update Expense'}</button>
-                <button type="button" onClick={() => { setShowEditModal(false); setEditingExpense(null) }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowEditModal(false); setEditingExpense(null) }} className="px-5 py-2 rounded-sm border border-gray-300 text-sm font-semibold hover:bg-gray-100 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
@@ -504,7 +504,7 @@ export default function ExpensesPage() {
             <p className="text-xs text-gray-400 mb-5">This cannot be undone.</p>
             <div className="flex gap-3">
               <button onClick={handleConfirmDelete} disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 text-sm">{submitting ? 'Deleting...' : 'Yes, Delete'}</button>
-              <button onClick={() => { setShowDeleteModal(false); setDeletingExpense(null) }} className="flex-1 py-2 rounded-sm border border-gray-200 font-semibold text-sm hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { setShowDeleteModal(false); setDeletingExpense(null) }} className="flex-1 py-2 rounded-sm border border-gray-300 font-semibold text-sm hover:bg-gray-100 text-gray-900">Cancel</button>
             </div>
           </div>
         </div>
@@ -558,7 +558,7 @@ export default function ExpensesPage() {
                 {submitting ? 'Archiving...' : 'Yes, Archive'}
               </button>
               <button onClick={() => { setShowArchiveCategoryModal(false); setArchivingCategory(null) }}
-                className="flex-1 py-2 rounded-sm border border-gray-200 font-semibold text-sm hover:bg-gray-50">
+                className="flex-1 py-2 rounded-sm border border-gray-300 font-semibold text-sm hover:bg-gray-100 text-gray-900">
                 Cancel
               </button>
             </div>
