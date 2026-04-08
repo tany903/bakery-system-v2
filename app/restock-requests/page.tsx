@@ -458,7 +458,7 @@ export default function RestockRequestsPage() {
         {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
           <button key={p} onClick={() => setPage(p)}
             className="px-3 py-1.5 rounded-sm text-xs font-bold"
-            style={page === p ? { backgroundColor: '#1a2340', color: 'white' } : { backgroundColor: 'white', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+            style={page === p ? { backgroundColor: '#1a2340', color: 'white' } : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
             {p}
           </button>
         ))}
@@ -547,7 +547,7 @@ export default function RestockRequestsPage() {
               className="text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900" />
           </div>
           <button onClick={() => { setDateFrom(''); setDateTo('') }}
-            className="px-3 py-2 rounded-sm text-xs font-bold text-gray-500 hover:bg-gray-100">Clear</button>
+            className="px-3 py-2 rounded-sm text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 shadow-sm">Clear</button>
         </div>
       )}
 
