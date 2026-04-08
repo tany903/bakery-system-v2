@@ -779,7 +779,7 @@ export default function PurchaseOrdersPage() {
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>
                   {submitting ? 'Creating...' : 'Create Purchase Order'}
                 </button>
-                <button type="button" onClick={() => { setShowNewPO(false); resetNewPOForm() }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowNewPO(false); resetNewPOForm() }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
