@@ -150,7 +150,7 @@ export default function ProductsPage() {
   //   { href: '/dashboard', icon: '/icons/menu.svg', label: 'Dashboard' },
   // ]
 
-  const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400"
+  const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-800"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
 
   if (loading) {
