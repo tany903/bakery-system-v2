@@ -779,7 +779,7 @@ export default function PurchaseOrdersPage() {
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>
                   {submitting ? 'Creating...' : 'Create Purchase Order'}
                 </button>
-                <button type="button" onClick={() => { setShowNewPO(false); resetNewPOForm() }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowNewPO(false); resetNewPOForm() }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
@@ -799,11 +799,11 @@ export default function PurchaseOrdersPage() {
             </div>
             <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-xs text-gray-400 font-bold">Created</p><p className="font-semibold">{new Date(viewingPO.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>
-                {viewingPO.expected_delivery_date && <div><p className="text-xs text-gray-400 font-bold">Expected Delivery</p><p className="font-semibold">{viewingPO.expected_delivery_date}</p></div>}
-                {viewingPO.created_by_profile && <div><p className="text-xs text-gray-400 font-bold">Created By</p><p className="font-semibold">{viewingPO.created_by_profile.full_name}</p></div>}
-                {viewingPO.approved_by_profile && <div><p className="text-xs text-gray-400 font-bold">Approved By</p><p className="font-semibold">{viewingPO.approved_by_profile.full_name}</p></div>}
-                {viewingPO.received_by_profile && <div><p className="text-xs text-gray-400 font-bold">Received By</p><p className="font-semibold">{viewingPO.received_by_profile.full_name}</p></div>}
+                <div><p className="text-xs text-gray-600 font-bold">Created</p><p className="font-semibold">{new Date(viewingPO.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>
+                {viewingPO.expected_delivery_date && <div><p className="text-xs text-gray-600 font-bold">Expected Delivery</p><p className="font-semibold">{viewingPO.expected_delivery_date}</p></div>}
+                {viewingPO.created_by_profile && <div><p className="text-xs text-gray-600 font-bold">Created By</p><p className="font-semibold">{viewingPO.created_by_profile.full_name}</p></div>}
+                {viewingPO.approved_by_profile && <div><p className="text-xs text-gray-600 font-bold">Approved By</p><p className="font-semibold">{viewingPO.approved_by_profile.full_name}</p></div>}
+                {viewingPO.received_by_profile && <div><p className="text-xs text-gray-600 font-bold">Received By</p><p className="font-semibold">{viewingPO.received_by_profile.full_name}</p></div>}
               </div>
               {viewingPO.notes && <p className="text-sm text-gray-500 italic border-l-2 border-gray-200 pl-3">{viewingPO.notes}</p>}
               {viewingPO.rejection_reason && <p className="text-sm text-red-500 border-l-2 border-red-300 pl-3">Rejected: {viewingPO.rejection_reason}</p>}
@@ -837,7 +837,7 @@ export default function PurchaseOrdersPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0">
               <button onClick={() => printPO(viewingPO)} className="px-5 py-2 rounded-sm font-bold text-white text-sm" style={{ backgroundColor: '#1a2340' }}>🖨 Print PO</button>
-              <button onClick={() => setViewingPO(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Close</button>
+              <button onClick={() => setViewingPO(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Close</button>
             </div>
           </div>
         </div>
@@ -900,7 +900,7 @@ export default function PurchaseOrdersPage() {
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#10B981' }}>
                   {submitting ? 'Receiving...' : 'Confirm Receipt'}
                 </button>
-                <button type="button" onClick={() => setReceivingPO(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => setReceivingPO(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
@@ -923,7 +923,7 @@ export default function PurchaseOrdersPage() {
               </div>
               <div className="flex gap-3">
                 <button onClick={handleRejectConfirm} className="flex-1 py-2 rounded-sm font-bold text-white text-sm" style={{ backgroundColor: '#EF4444' }}>Confirm Rejection</button>
-                <button onClick={() => { setRejectingPO(null); setRejectReason('') }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button onClick={() => { setRejectingPO(null); setRejectReason('') }} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </div>
           </div>
@@ -951,7 +951,7 @@ export default function PurchaseOrdersPage() {
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>
                   {submitting ? 'Saving...' : 'Save Supplier'}
                 </button>
-                <button type="button" onClick={() => setShowNewSupplier(false)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => setShowNewSupplier(false)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
@@ -979,7 +979,7 @@ export default function PurchaseOrdersPage() {
                 <button type="submit" disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50" style={{ backgroundColor: '#1a2340' }}>
                   {submitting ? 'Saving...' : 'Save Changes'}
                 </button>
-                <button type="button" onClick={() => setEditingSupplier(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => setEditingSupplier(null)} className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">Cancel</button>
               </div>
             </form>
           </div>
