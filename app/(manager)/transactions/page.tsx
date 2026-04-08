@@ -676,12 +676,12 @@ export default function TransactionsPage() {
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Search Product</label>
                   <input value={transferSearch} onChange={e => { setTransferSearch(e.target.value); setTransferPage(1) }}
                     placeholder="Product name…"
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
                   <select value={transferStatus} onChange={e => { setTransferStatus(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="voided">Voided</option>
@@ -690,12 +690,12 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
                   <input type="date" value={transferDateFrom} onChange={e => { setTransferDateFrom(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
                   <input type="date" value={transferDateTo} onChange={e => { setTransferDateTo(e.target.value); setTransferPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
               </div>
 
@@ -784,12 +784,12 @@ export default function TransactionsPage() {
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Search Product</label>
                   <input value={productionSearch} onChange={e => { setProductionSearch(e.target.value); setProductionPage(1) }}
                     placeholder="Product name…"
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">Status</label>
                   <select value={productionStatus} onChange={e => { setProductionStatus(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900">
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="voided">Voided</option>
@@ -798,12 +798,12 @@ export default function TransactionsPage() {
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
                   <input type="date" value={productionDateFrom} onChange={e => { setProductionDateFrom(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
                   <input type="date" value={productionDateTo} onChange={e => { setProductionDateTo(e.target.value); setProductionPage(1) }}
-                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                    className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900" />
                 </div>
               </div>
 
