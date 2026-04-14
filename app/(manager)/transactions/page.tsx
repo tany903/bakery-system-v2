@@ -407,10 +407,10 @@ export default function TransactionsPage() {
   }
 
   const tabs: { key: Tab; label: string; icon: string; count: number }[] = [
-    { key: 'sales',      label: 'Sales',              icon: '🧾', count: sales.length },
-    { key: 'transfers',  label: 'Stock Transfers',     icon: '📦', count: transfers.length },
-    { key: 'production', label: 'Production Records',  icon: '🏭', count: production.length },
-    { key: 'disposals',  label: 'Disposals',           icon: '🗑️', count: disposals.length },
+    { key: 'sales',      label: 'Sales',              icon: '', count: sales.length },
+    { key: 'transfers',  label: 'Stock Transfers',     icon: '', count: transfers.length },
+    { key: 'production', label: 'Production Records',  icon: '', count: production.length },
+    { key: 'disposals',  label: 'Disposals',           icon: '', count: disposals.length },
   ]
 
   return (
@@ -470,7 +470,7 @@ export default function TransactionsPage() {
                 className="flex items-center gap-2 px-5 py-3 rounded-sm font-bold text-sm transition-all"
                 style={activeTab === t.key
                   ? { backgroundColor: '#1a2340', color: 'white', boxShadow: '0 4px 12px rgba(0,0,0,0.25)' }
-                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)', opacity: 0.85 }}>
+                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)'}}>
                 <span>{t.icon}</span>
                 <span>{t.label}</span>
                 <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full"
@@ -525,75 +525,17 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
-              {/* Cash entries sub-section */}
-              {cashEntries.length > 0 && (
-                <div className="bg-white rounded-sm overflow-hidden mb-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
-                  <div className="flex items-center gap-2 px-5 py-3" style={{ backgroundColor: '#1a4033' }}>
-                    <span className="text-sm">💵</span>
-                    <h3 className="font-bold text-white text-sm">Cash Register Entries</h3>
-                    <span className="text-xs text-white opacity-60 ml-1">(Cash-In / Cash-Out)</span>
-                    <span className="ml-auto text-xs text-white opacity-60">{cashEntries.length} entries</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                          <th className="px-5 py-3 font-semibold">Date & Time</th>
-                          <th className="px-5 py-3 font-semibold">Type</th>
-                          <th className="px-5 py-3 font-semibold">Amount</th>
-                          <th className="px-5 py-3 font-semibold">By</th>
-                          <th className="px-5 py-3 font-semibold">Notes</th>
-                          <th className="px-5 py-3 font-semibold">Status</th>
-                          <th className="px-5 py-3 font-semibold">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cashEntries.map(entry => (
-                          <tr key={entry.id} className={`border-b border-gray-100 last:border-0 transition-colors ${entry.is_voided ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(entry.created_at)}</td>
-                            <td className="px-5 py-3">
-                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${entry.type === 'cash_in' ? 'bg-green-500' : 'bg-orange-500'}`}>
-                                {entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'}
-                              </span>
-                            </td>
-                            <td className={`px-5 py-3 text-sm font-black ${entry.is_voided ? 'line-through text-gray-400' : entry.type === 'cash_in' ? 'text-green-600' : 'text-orange-600'}`}>
-                              {entry.type === 'cash_in' ? '+' : '-'}{peso(entry.amount)}
-                            </td>
-                            <td className="px-5 py-3 text-xs text-gray-500">{entry.profiles?.full_name || '—'}</td>
-                            <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{entry.notes || '—'}</td>
-                            <td className="px-5 py-3">
-                              {entry.is_voided
-                                ? <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">VOIDED</span>
-                                : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Active</span>}
-                            </td>
-                            <td className="px-5 py-3">
-                              {!entry.is_voided && (
-                                <button
-                                  onClick={() => setVoidTarget({ type: 'cash', id: entry.id, label: `${entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'} ${peso(entry.amount)}` })}
-                                  className="text-xs font-bold px-3 py-1 rounded-sm text-white hover:opacity-80"
-                                  style={{ backgroundColor: '#7B1111' }}>
-                                  Void
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
               {/* Sales table */}
               <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-                  <span className="text-white">🧾</span>
+                  <span className="text-white"></span>
                   <h2 className="font-bold text-white">Sales</h2>
                   <span className="ml-auto text-xs text-white opacity-60">{filteredSales.length} records</span>
                 </div>
                 {filteredSales.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
-                    <div className="text-5xl mb-3">🧾</div>
+                    <div className="text-5xl mb-3"></div>
                     <p className="text-lg font-bold text-gray-600">No sales found</p>
                   </div>
                 ) : (
@@ -633,7 +575,7 @@ export default function TransactionsPage() {
                                   <td className="px-5 py-3 text-xs text-gray-600">{sale.profiles?.full_name || '—'}</td>
                                   <td className="px-5 py-3">
                                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${sale.payment_method === 'cash' ? 'bg-green-500' : 'bg-blue-500'}`}>
-                                      {sale.payment_method === 'cash' ? '💵 Cash' : '📱 Online'}
+                                      {sale.payment_method === 'cash' ? 'Cash' : 'Online'}
                                     </span>
                                   </td>
                                   <td className={`px-5 py-3 text-sm font-black ${sale.is_voided ? 'line-through text-gray-400' : 'text-gray-900'}`}>
@@ -716,6 +658,67 @@ export default function TransactionsPage() {
             </div>
           )}
 
+
+          
+              {/* Cash entries sub-section */}
+              {cashEntries.length > 0 && (
+                <div className="bg-white rounded-sm overflow-hidden mt-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+                  <div className="flex items-center gap-2 px-5 py-3" style={{ backgroundColor: '#1a4033' }}>
+                    <span className="text-sm"></span>
+                    <h3 className="font-bold text-white text-sm">Cash Register Entries</h3>
+                    <span className="text-xs text-white opacity-60 ml-1">(Cash-In / Cash-Out)</span>
+                    <span className="ml-auto text-xs text-white opacity-60">{cashEntries.length} entries</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="px-5 py-3 font-semibold">Date & Time</th>
+                          <th className="px-5 py-3 font-semibold">Type</th>
+                          <th className="px-5 py-3 font-semibold">Amount</th>
+                          <th className="px-5 py-3 font-semibold">By</th>
+                          <th className="px-5 py-3 font-semibold">Notes</th>
+                          <th className="px-5 py-3 font-semibold">Status</th>
+                          <th className="px-5 py-3 font-semibold">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cashEntries.map(entry => (
+                          <tr key={entry.id} className={`border-b border-gray-100 last:border-0 transition-colors ${entry.is_voided ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(entry.created_at)}</td>
+                            <td className="px-5 py-3">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${entry.type === 'cash_in' ? 'bg-green-500' : 'bg-orange-500'}`}>
+                                {entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+                              </span>
+                            </td>
+                            <td className={`px-5 py-3 text-sm font-black ${entry.is_voided ? 'line-through text-gray-400' : entry.type === 'cash_in' ? 'text-green-600' : 'text-orange-600'}`}>
+                              {entry.type === 'cash_in' ? '+' : '-'}{peso(entry.amount)}
+                            </td>
+                            <td className="px-5 py-3 text-xs text-gray-500">{entry.profiles?.full_name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{entry.notes || '—'}</td>
+                            <td className="px-5 py-3">
+                              {entry.is_voided
+                                ? <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">VOIDED</span>
+                                : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Active</span>}
+                            </td>
+                            <td className="px-5 py-3">
+                              {!entry.is_voided && (
+                                <button
+                                  onClick={() => setVoidTarget({ type: 'cash', id: entry.id, label: `${entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'} ${peso(entry.amount)}` })}
+                                  className="text-xs font-bold px-3 py-1 rounded-sm text-white hover:opacity-80"
+                                  style={{ backgroundColor: '#7B1111' }}>
+                                  Void
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
           {/* ── TAB: TRANSFERS ──────────────────────────────────────────────────── */}
           {activeTab === 'transfers' && (
             <div>
@@ -750,14 +753,14 @@ export default function TransactionsPage() {
 
               <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-                  <span className="text-white">📦</span>
+                  <span className="text-white"></span>
                   <h2 className="font-bold text-white">Stock Transfers</h2>
                   <span className="text-xs text-white opacity-60 ml-1">(Production → Shop)</span>
                   <span className="ml-auto text-xs text-white opacity-60">{filteredTransfers.length} records</span>
                 </div>
                 {filteredTransfers.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
-                    <div className="text-5xl mb-3">📦</div>
+                    <div className="text-5xl mb-3"></div>
                     <p className="text-lg font-bold text-gray-600">No transfers found</p>
                   </div>
                 ) : (
@@ -858,13 +861,13 @@ export default function TransactionsPage() {
 
               <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-                  <span className="text-white">🏭</span>
+                  <span className="text-white"></span>
                   <h2 className="font-bold text-white">Production Records</h2>
                   <span className="ml-auto text-xs text-white opacity-60">{filteredProduction.length} records</span>
                 </div>
                 {filteredProduction.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
-                    <div className="text-5xl mb-3">🏭</div>
+                    <div className="text-5xl mb-3"></div>
                     <p className="text-lg font-bold text-gray-600">No production records found</p>
                   </div>
                 ) : (
@@ -968,14 +971,14 @@ export default function TransactionsPage() {
 
               <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-                  <span className="text-white">🗑️</span>
+                  <span className="text-white"></span>
                   <h2 className="font-bold text-white">Disposals</h2>
                   <span className="text-xs text-white opacity-60 ml-1">(Pull-outs & OTH)</span>
                   <span className="ml-auto text-xs text-white opacity-60">{filteredDisposals.length} records</span>
                 </div>
                 {filteredDisposals.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16">
-                    <div className="text-5xl mb-3">🗑️</div>
+                    <div className="text-5xl mb-3"></div>
                     <p className="text-lg font-bold text-gray-600">No disposals found</p>
                   </div>
                 ) : (

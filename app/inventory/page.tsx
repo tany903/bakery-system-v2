@@ -334,7 +334,7 @@ const productionNavLinks = [
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-sm w-full max-w-md" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
           <div className="px-6 py-4" style={{ backgroundColor: disposalType === 'pullout' ? '#991B1B' : '#5B21B6' }}>
-            <h2 className="text-white font-black text-lg">{disposalType === 'pullout' ? '🗑️ Pull-out Stock' : '🎁 On the House'}</h2>
+            <h2 className="text-white font-black text-lg">{disposalType === 'pullout' ? 'Pull-out Stock' : 'On the House'}</h2>
             <p className="text-white text-xs opacity-60 mt-0.5">{disposalProduct.name} — {disposalLocation} stock ({disposalType === 'pullout' ? disposalProduct.shop_current_stock || disposalProduct.production_current_stock : disposalLocation === 'shop' ? disposalProduct.shop_current_stock : disposalProduct.production_current_stock} available)</p>
           </div>
           <form onSubmit={handleDisposal} className="px-6 py-5 space-y-4">

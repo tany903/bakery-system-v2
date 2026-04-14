@@ -102,7 +102,7 @@ export default function ProductForm({ product, onSubmit, onCancel }: ProductForm
       {/* Shop Inventory */}
       <div className="rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 8px rgba(0,0,0,0.1)' }}>
         <div className="px-4 py-3" style={{ backgroundColor: '#1a2340' }}>
-          <p className="text-white font-black text-sm">🏪 Shop Inventory</p>
+          <p className="text-white font-black text-sm">Shop Inventory</p>
         </div>
         <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50">
           <div>
@@ -123,7 +123,7 @@ export default function ProductForm({ product, onSubmit, onCancel }: ProductForm
       {/* Production Inventory */}
       <div className="rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 8px rgba(0,0,0,0.1)' }}>
         <div className="px-4 py-3" style={{ backgroundColor: '#220901' }}>
-          <p className="text-white font-black text-sm">🏭 Production Inventory</p>
+          <p className="text-white font-black text-sm">Production Inventory</p>
         </div>
         <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50">
           <div>

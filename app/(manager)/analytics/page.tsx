@@ -487,7 +487,7 @@ export default function AnalyticsPage() {
 
               {summary.totalTransactions === 0 && (
                 <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16 mb-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                  <div className="text-5xl mb-3">📭</div>
+                  <div className="text-5xl mb-3"></div>
                   <p className="text-lg font-bold text-gray-600">No sales data for this period</p>
                 </div>
               )}
@@ -517,7 +517,7 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-center py-16 text-gray-400 text-sm font-semibold">Loading...</div>
                   ) : weeklyData.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16">
-                      <div className="text-4xl mb-3">📭</div>
+                      <div className="text-4xl mb-3"></div>
                       <p className="text-sm font-bold text-gray-500">No data for this month</p>
                     </div>
                   ) : (
@@ -674,7 +674,7 @@ export default function AnalyticsPage() {
       
       {dailyData.items.length === 0 ? (
         <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-          <div className="text-5xl mb-3">📭</div>
+          <div className="text-5xl mb-3"></div>
           <p className="text-lg font-bold text-gray-600">No sales on this day</p>
         </div>
       ) : (
@@ -745,7 +745,7 @@ export default function AnalyticsPage() {
               <div className={`rounded-sm p-5 mb-5 ${trend.trend === 'up' ? 'bg-green-50' : trend.trend === 'down' ? 'bg-red-50' : 'bg-white'}`}
                 style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
                 <div className="flex items-center gap-4">
-                  <span className="text-4xl">{trend.trend === 'up' ? '📈' : trend.trend === 'down' ? '📉' : '➡️'}</span>
+                  <span className="text-4xl">{trend.trend === 'up' ? '' : trend.trend === 'down' ? '' : ''}</span>
                   <div className="flex-1">
                     <p className="font-black text-gray-900 text-lg">
                       Revenue is {trend.trend === 'up' ? 'trending up' : trend.trend === 'down' ? 'trending down' : 'stable'}
@@ -773,7 +773,7 @@ export default function AnalyticsPage() {
                 <p className="text-xs text-gray-400 mb-4">Based on avg daily sales from the last 14 days.</p>
                 {predictions.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
-                    <div className="text-4xl mb-2">📭</div>
+                    <div className="text-4xl mb-2"></div>
                     <p className="text-sm">Not enough sales data yet.</p>
                   </div>
                 ) : (
@@ -786,15 +786,15 @@ export default function AnalyticsPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="font-semibold text-sm text-gray-900 flex items-center gap-1">
-                              {p.urgency === 'critical' && <span>🚨</span>}
-                              {p.urgency === 'warning' && <span>⚠️</span>}
-                              {p.urgency === 'ok' && <span>✅</span>}
+                              {p.urgency === 'critical' && <span></span>}
+                              {p.urgency === 'warning' && <span></span>}
+                              {p.urgency === 'ok' && <span></span>}
                               {p.product_name}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">Stock: {p.current_shop_stock} pcs • Avg: {p.avg_daily_sales}/day</p>
                             {p.days_until_stockout !== null && (
                               <p className={`text-xs font-semibold mt-0.5 ${p.urgency === 'critical' ? 'text-red-600' : p.urgency === 'warning' ? 'text-yellow-600' : 'text-gray-400'}`}>
-                                {p.days_until_stockout === 0 ? '⚡ Stockout today!' : `Runs out in ~${p.days_until_stockout} day${p.days_until_stockout !== 1 ? 's' : ''}`}
+                                {p.days_until_stockout === 0 ? 'Stockout today!' : `Runs out in ~${p.days_until_stockout} day${p.days_until_stockout !== 1 ? 's' : ''}`}
                               </p>
                             )}
                           </div>
@@ -817,7 +817,7 @@ export default function AnalyticsPage() {
                 <p className="text-xs text-gray-400 mb-4">Based on avg revenue per day over the last 30 days.</p>
                 {bestDays.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
-                    <div className="text-4xl mb-2">📭</div>
+                    <div className="text-4xl mb-2"></div>
                     <p className="text-sm">Not enough sales data yet.</p>
                   </div>
                 ) : (
@@ -828,7 +828,7 @@ export default function AnalyticsPage() {
                         <div key={d.day}>
                           <div className="flex justify-between text-xs font-semibold mb-1">
                             <span className="text-gray-700">
-                              {index === 0 ? '🏆 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '    '}{d.day}
+                              {index === 0 ? ' ' : index === 1 ? ' ' : index === 2 ? ' ' : '    '}{d.day}
                             </span>
                             <span className="text-gray-500">₱{d.avgRevenue.toLocaleString('en-PH')} avg</span>
                           </div>
@@ -838,7 +838,7 @@ export default function AnalyticsPage() {
                         </div>
                       )
                     })}
-                    <p className="text-xs text-gray-400 mt-2">💡 Stock up the day before your busiest days!</p>
+                    {/* <p className="text-xs text-gray-400 mt-2">💡 Stock up the day before your busiest days!</p> */}
                   </div>
                 )}
               </div>

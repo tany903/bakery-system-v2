@@ -560,7 +560,7 @@ export default function PurchaseOrdersPage() {
                           <span className="font-black text-gray-900">₱{Number(po.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                         </div>
                         {po.expected_delivery_date && (
-                          <p className="text-xs text-gray-400">📅 Expected: {new Date(po.expected_delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                          <p className="text-xs text-gray-400">Expected: {new Date(po.expected_delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                         )}
                         {po.status === 'rejected' && po.rejection_reason && (
                           <p className="text-xs text-red-500 italic border-l-2 border-red-200 pl-2">{po.rejection_reason}</p>

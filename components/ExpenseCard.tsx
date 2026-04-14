@@ -41,7 +41,7 @@ export default function ExpenseCard({ expense, onEdit, onDelete }: ExpenseCardPr
         {/* Date */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-400 font-medium">Date</span>
-          <span className="text-xs font-semibold text-gray-700">📅 {formattedDate}</span>
+          <span className="text-xs font-semibold text-gray-700">{formattedDate}</span>
         </div>
 
         {/* Notes */}

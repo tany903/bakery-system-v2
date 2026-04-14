@@ -90,6 +90,7 @@ export async function createRestockRequest(
 // AUTO-GENERATE REQUESTS FOR LOW STOCK
 // =============================================
 
+
 export async function autoGenerateLowStockRequests(
   requestedBy: string
 ): Promise<RestockRequest[]> {
@@ -104,22 +105,40 @@ export async function autoGenerateLowStockRequests(
     (product) => product.shop_current_stock < product.shop_minimum_threshold
   ) || []
 
-  // Filter out products that already have a pending request
-  const eligibleProducts: typeof lowStockProducts = []
-  for (const product of lowStockProducts) {
-    const { data: existingItem } = await supabase
-      .from('restock_request_items')
-      .select('id, restock_requests!inner(status)')
-      .eq('product_id', product.id)
-      .in('restock_requests.status', ['requested', 'acknowledged', 'in_progress'])
-      .maybeSingle()
+  if (lowStockProducts.length === 0) return []
 
-    if (!existingItem) eligibleProducts.push(product)
+  // Step 1: get all active request IDs
+  const { data: activeRequests, error: activeError } = await supabase
+    .from('restock_requests')
+    .select('id')
+    .in('status', ['requested', 'acknowledged', 'in_progress'])
+
+  if (activeError) throw activeError
+
+  const activeRequestIds = (activeRequests || []).map((r: any) => r.id)
+
+  // Step 2: get all product IDs tied to those requests
+  let alreadyPendingIds = new Set<string>()
+
+  if (activeRequestIds.length > 0) {
+    const { data: activeItems, error: itemsError } = await supabase
+      .from('restock_request_items')
+      .select('product_id')
+      .in('restock_request_id', activeRequestIds)
+
+    if (itemsError) throw itemsError
+
+    alreadyPendingIds = new Set((activeItems || []).map((i: any) => i.product_id))
   }
+
+  // Step 3: filter out already-pending products
+  const eligibleProducts = lowStockProducts.filter(
+    (product) => !alreadyPendingIds.has(product.id)
+  )
 
   if (eligibleProducts.length === 0) return []
 
-  const items: NewRestockItem[] = eligibleProducts.map(product => ({
+  const items: NewRestockItem[] = eligibleProducts.map((product) => ({
     product_id: product.id,
     requested_quantity: product.shop_minimum_threshold - product.shop_current_stock,
     notes: 'Auto-generated: Stock below minimum threshold',
@@ -130,11 +149,56 @@ export async function autoGenerateLowStockRequests(
     'auto_alert',
     requestedBy,
     'Auto-generated batch for low stock items'
-    // no delivery_date for auto-generated
   )
 
   return [request]
 }
+
+// export async function autoGenerateLowStockRequests(
+//   requestedBy: string
+// ): Promise<RestockRequest[]> {
+//   const { data: allProducts, error: productsError } = await supabase
+//     .from('products')
+//     .select('*')
+//     .eq('is_archived', false)
+
+//   if (productsError) throw productsError
+
+//   const lowStockProducts = allProducts?.filter(
+//     (product) => product.shop_current_stock < product.shop_minimum_threshold
+//   ) || []
+
+//   // Filter out products that already have a pending request
+//   const eligibleProducts: typeof lowStockProducts = []
+//   for (const product of lowStockProducts) {
+//     const { data: existingItem } = await supabase
+//       .from('restock_request_items')
+//       .select('id, restock_requests!inner(status)')
+//       .eq('product_id', product.id)
+//       .in('restock_requests.status', ['requested', 'acknowledged', 'in_progress'])
+//       .maybeSingle()
+
+//     if (!existingItem) eligibleProducts.push(product)
+//   }
+
+//   if (eligibleProducts.length === 0) return []
+
+//   const items: NewRestockItem[] = eligibleProducts.map(product => ({
+//     product_id: product.id,
+//     requested_quantity: product.shop_minimum_threshold - product.shop_current_stock,
+//     notes: 'Auto-generated: Stock below minimum threshold',
+//   }))
+
+//   const request = await createRestockRequest(
+//     items,
+//     'auto_alert',
+//     requestedBy,
+//     'Auto-generated batch for low stock items'
+//     // no delivery_date for auto-generated
+//   )
+
+//   return [request]
+// }
 
 // =============================================
 // GET RESTOCK REQUESTS

@@ -49,8 +49,8 @@ export default function ProductGrid({ products, categories, onAddToCart }: Produ
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 overflow-y-auto pb-2">
         {filtered.length === 0 ? (
           <div className="col-span-4 flex flex-col items-center justify-center py-16 text-gray-500">
-            <div className="text-4xl mb-2">🔍</div>
-            <p className="font-semibold text-sm">No products in this category</p>
+            {/* <div className="text-4xl mb-2">🔍</div> */}
+            <p className="font-semibold text-md text-gray-700">No products in this category</p>
           </div>
         ) : (
           filtered.map((product) => {
