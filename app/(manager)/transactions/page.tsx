@@ -656,7 +656,69 @@ export default function TransactionsPage() {
                   </>
                 )}
               </div>
+
+{cashEntries.length > 0 && (
+  <div className="bg-white rounded-sm overflow-hidden mt-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+    <div className="flex items-center gap-2 px-5 py-3" style={{ backgroundColor: '#1a4033' }}>
+      <h3 className="font-bold text-white text-sm">Cash Register Entries</h3>
+      <span className="text-xs text-white opacity-60 ml-1">(Cash-In / Cash-Out)</span>
+      <span className="ml-auto text-xs text-white opacity-60">{cashEntries.length} entries</span>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+            <th className="px-5 py-3 font-semibold">Date & Time</th>
+            <th className="px-5 py-3 font-semibold">Type</th>
+            <th className="px-5 py-3 font-semibold">Amount</th>
+            <th className="px-5 py-3 font-semibold">By</th>
+            <th className="px-5 py-3 font-semibold">Notes</th>
+            <th className="px-5 py-3 font-semibold">Status</th>
+            <th className="px-5 py-3 font-semibold">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {cashEntries.slice((cashPage - 1) * PER_PAGE, cashPage * PER_PAGE).map(entry => (
+            <tr key={entry.id} className={`border-b border-gray-100 last:border-0 transition-colors ${entry.is_voided ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
+              <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(entry.created_at)}</td>
+              <td className="px-5 py-3">
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${entry.type === 'cash_in' ? 'bg-green-500' : 'bg-orange-500'}`}>
+                  {entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+                </span>
+              </td>
+              <td className={`px-5 py-3 text-sm font-black ${entry.is_voided ? 'line-through text-gray-400' : entry.type === 'cash_in' ? 'text-green-600' : 'text-orange-600'}`}>
+                {entry.type === 'cash_in' ? '+' : '-'}{peso(entry.amount)}
+              </td>
+              <td className="px-5 py-3 text-xs text-gray-500">{entry.profiles?.full_name || '—'}</td>
+              <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{entry.notes || '—'}</td>
+              <td className="px-5 py-3">
+                {entry.is_voided
+                  ? <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">VOIDED</span>
+                  : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Active</span>}
+              </td>
+              <td className="px-5 py-3">
+                {!entry.is_voided && (
+                  <button
+                    onClick={() => setVoidTarget({ type: 'cash', id: entry.id, label: `${entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'} ${peso(entry.amount)}` })}
+                    className="text-xs font-bold px-3 py-1 rounded-sm text-white hover:opacity-80"
+                    style={{ backgroundColor: '#7B1111' }}>
+                    Void
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    <Pagination current={cashPage} total={Math.ceil(cashEntries.length / PER_PAGE)} onChange={setCashPage} />
+  </div>
+)}
+
+
             </div>
+
+          
           )}
 
 
@@ -719,63 +781,7 @@ export default function TransactionsPage() {
                   </div>
                 </div>
               )} */}
-              {cashEntries.length > 0 && (
-  <div className="bg-white rounded-sm overflow-hidden mt-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
-    <div className="flex items-center gap-2 px-5 py-3" style={{ backgroundColor: '#1a4033' }}>
-      <h3 className="font-bold text-white text-sm">Cash Register Entries</h3>
-      <span className="text-xs text-white opacity-60 ml-1">(Cash-In / Cash-Out)</span>
-      <span className="ml-auto text-xs text-white opacity-60">{cashEntries.length} entries</span>
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-            <th className="px-5 py-3 font-semibold">Date & Time</th>
-            <th className="px-5 py-3 font-semibold">Type</th>
-            <th className="px-5 py-3 font-semibold">Amount</th>
-            <th className="px-5 py-3 font-semibold">By</th>
-            <th className="px-5 py-3 font-semibold">Notes</th>
-            <th className="px-5 py-3 font-semibold">Status</th>
-            <th className="px-5 py-3 font-semibold">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cashEntries.slice((cashPage - 1) * PER_PAGE, cashPage * PER_PAGE).map(entry => (
-            <tr key={entry.id} className={`border-b border-gray-100 last:border-0 transition-colors ${entry.is_voided ? 'bg-red-50' : 'hover:bg-gray-50'}`}>
-              <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{fmt(entry.created_at)}</td>
-              <td className="px-5 py-3">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${entry.type === 'cash_in' ? 'bg-green-500' : 'bg-orange-500'}`}>
-                  {entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'}
-                </span>
-              </td>
-              <td className={`px-5 py-3 text-sm font-black ${entry.is_voided ? 'line-through text-gray-400' : entry.type === 'cash_in' ? 'text-green-600' : 'text-orange-600'}`}>
-                {entry.type === 'cash_in' ? '+' : '-'}{peso(entry.amount)}
-              </td>
-              <td className="px-5 py-3 text-xs text-gray-500">{entry.profiles?.full_name || '—'}</td>
-              <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{entry.notes || '—'}</td>
-              <td className="px-5 py-3">
-                {entry.is_voided
-                  ? <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">VOIDED</span>
-                  : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Active</span>}
-              </td>
-              <td className="px-5 py-3">
-                {!entry.is_voided && (
-                  <button
-                    onClick={() => setVoidTarget({ type: 'cash', id: entry.id, label: `${entry.type === 'cash_in' ? 'Cash In' : 'Cash Out'} ${peso(entry.amount)}` })}
-                    className="text-xs font-bold px-3 py-1 rounded-sm text-white hover:opacity-80"
-                    style={{ backgroundColor: '#7B1111' }}>
-                    Void
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-    <Pagination current={cashPage} total={Math.ceil(cashEntries.length / PER_PAGE)} onChange={setCashPage} />
-  </div>
-)}
+              
 
           {/* ── TAB: TRANSFERS ──────────────────────────────────────────────────── */}
           {activeTab === 'transfers' && (
