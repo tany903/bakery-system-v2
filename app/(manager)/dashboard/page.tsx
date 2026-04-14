@@ -22,16 +22,48 @@ interface RecentSale {
   cashier: { full_name: string } | null
 }
 
+interface TopProduct {
+  product_name: string
+  total_qty: number
+  total_revenue: number
+}
+
+interface TodayDisposal {
+  id: string
+  products: { name: string } | null
+  type: 'pullout' | 'oth'
+  reason: string
+  quantity: number
+  location: 'shop' | 'production'
+  profiles: { full_name: string } | null
+  created_at: string
+}
+
 export default function ManagerDashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [profileName, setProfileName] = useState('')
   const [userId, setUserId] = useState('')
+
+  // Existing stats
   const [todaySales, setTodaySales] = useState(0)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
   const [lowStockProducts, setLowStockProducts] = useState<LowStockProduct[]>([])
   const [recentSales, setRecentSales] = useState<RecentSale[]>([])
+
+  // New stats
+  const [outOfStockCount, setOutOfStockCount] = useState(0)
+  const [netIncome, setNetIncome] = useState(0)
+  const [todayDisposalCount, setTodayDisposalCount] = useState(0)
+  const [todayDisposalQty, setTodayDisposalQty] = useState(0)
+  const [todayProduction, setTodayProduction] = useState(0)
+  const [pendingTransfers, setPendingTransfers] = useState(0)
+  const [cashOutToday, setCashOutToday] = useState(0)
+
+  // New tables
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+  const [todayDisposals, setTodayDisposals] = useState<TodayDisposal[]>([])
 
   useEffect(() => { checkAuthAndLoad() }, [])
 
@@ -44,7 +76,7 @@ export default function ManagerDashboard() {
       setProfileName(profile.full_name)
       setUserId(user.id)
       await loadData()
-    } catch (err) {
+    } catch {
       router.push('/login')
     } finally {
       setLoading(false)
@@ -52,37 +84,110 @@ export default function ManagerDashboard() {
   }
 
   async function loadData() {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const now = new Date()
+    const todayStart = new Date(now)
+    todayStart.setHours(0, 0, 0, 0)
+    const todayISO = todayStart.toISOString()
 
+    // ── Today's sales ────────────────────────────────────────────────────────
     const { data: sales } = await supabase
       .from('sales')
       .select('total_amount')
-      .gte('sale_date', today.toISOString())
+      .gte('sale_date', todayISO)
       .eq('is_voided', false)
-    setTodaySales((sales || []).reduce((sum, s) => sum + Number(s.total_amount), 0))
+    const salesTotal = (sales || []).reduce((sum, s) => sum + Number(s.total_amount), 0)
+    setTodaySales(salesTotal)
 
-    const { data: lowStock } = await supabase
+    // ── Stock levels ─────────────────────────────────────────────────────────
+    const { data: allProducts } = await supabase
       .from('products')
       .select('id, name, shop_current_stock, shop_minimum_threshold')
       .eq('is_archived', false)
-    const filtered = (lowStock || []).filter(p => p.shop_current_stock < p.shop_minimum_threshold)
-    setLowStockCount(filtered.length)
-    setLowStockProducts(filtered)
+    const lowStock = (allProducts || []).filter(p => p.shop_current_stock > 0 && p.shop_current_stock < p.shop_minimum_threshold)
+    const outOfStock = (allProducts || []).filter(p => p.shop_current_stock <= 0)
+    setLowStockCount(lowStock.length)
+    setLowStockProducts(lowStock)
+    setOutOfStockCount(outOfStock.length)
 
+    // ── Pending restock requests ─────────────────────────────────────────────
     const { data: pending } = await supabase
       .from('restock_requests')
       .select('id')
       .eq('status', 'requested')
     setPendingCount(pending?.length || 0)
 
+    // ── Recent sales ─────────────────────────────────────────────────────────
     const { data: recentSalesData } = await supabase
       .from('sales')
-      .select(`id, sale_date, total_amount, payment_method, cashier:profiles!sales_cashier_id_fkey (full_name)`)
+      .select('id, sale_date, total_amount, payment_method, cashier:profiles!sales_cashier_id_fkey(full_name)')
       .eq('is_voided', false)
       .order('sale_date', { ascending: false })
       .limit(5)
     setRecentSales((recentSalesData as any) || [])
+
+    // ── Today's expenses → net income ────────────────────────────────────────
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('amount')
+      .gte('created_at', todayISO)
+    const expensesTotal = (expenses || []).reduce((sum, e) => sum + Number(e.amount), 0)
+    setNetIncome(salesTotal - expensesTotal)
+
+    // ── Today's disposals ────────────────────────────────────────────────────
+    const { data: disposals } = await supabase
+      .from('stock_disposals')
+      .select('id, quantity, type, reason, location, created_at, products(name), profiles!stock_disposals_performed_by_fkey(full_name)')
+      .gte('created_at', todayISO)
+      .eq('is_voided', false)
+      .order('created_at', { ascending: false })
+    setTodayDisposalCount((disposals || []).length)
+    setTodayDisposalQty((disposals || []).reduce((sum, d) => sum + Number(d.quantity), 0))
+    setTodayDisposals((disposals as any) || [])
+
+    // ── Today's production ───────────────────────────────────────────────────
+    const { data: prodData } = await supabase
+      .from('production')
+      .select('quantity_produced')
+      .gte('created_at', todayISO)
+      .eq('is_voided', false)
+    setTodayProduction((prodData || []).reduce((sum, p) => sum + Number(p.quantity_produced), 0))
+
+    // ── Pending transfers (not yet transferred = production stock available) ─
+    // Using inventory_transfers created today as a proxy; adjust if you have a
+    // "pending" status column on transfers
+    const { data: transferData } = await supabase
+      .from('inventory_transfers')
+      .select('id')
+      .eq('is_voided', false)
+      .gte('created_at', todayISO)
+    setPendingTransfers(transferData?.length || 0)
+
+    // ── Cash out today ───────────────────────────────────────────────────────
+    const { data: cashOut } = await supabase
+      .from('cash_register')
+      .select('amount')
+      .eq('type', 'cash_out')
+      .eq('is_voided', false)
+      .gte('created_at', todayISO)
+    setCashOutToday((cashOut || []).reduce((sum, c) => sum + Number(c.amount), 0))
+
+    // ── Top selling products today ───────────────────────────────────────────
+    const { data: saleItems } = await supabase
+      .from('sale_items')
+      .select('product_name, quantity, subtotal, sale:sales!inner(sale_date, is_voided)')
+      .eq('sale.is_voided', false)
+      .gte('sale.sale_date', todayISO)
+    const productMap: Record<string, { total_qty: number; total_revenue: number }> = {}
+    ;(saleItems || []).forEach((item: any) => {
+      if (!productMap[item.product_name]) productMap[item.product_name] = { total_qty: 0, total_revenue: 0 }
+      productMap[item.product_name].total_qty += Number(item.quantity)
+      productMap[item.product_name].total_revenue += Number(item.subtotal)
+    })
+    const sorted = Object.entries(productMap)
+      .map(([product_name, v]) => ({ product_name, ...v }))
+      .sort((a, b) => b.total_qty - a.total_qty)
+      .slice(0, 5)
+    setTopProducts(sorted)
   }
 
   const handleLogout = async () => {
@@ -90,17 +195,17 @@ export default function ManagerDashboard() {
     router.push('/login')
   }
 
-  // const sidebarLinks = [
-  //   { href: '/restock-requests', icon: '/icons/Plus_square.svg', label: 'Restock' },
-  //   { href: '/inventory', icon: '/icons/Box.svg', label: 'Inventory' },
-  //   { href: '/expenses', icon: '/icons/payment.svg', label: 'Expenses' },
-  //   { href: '/analytics', icon: '/icons/Bar_chart.svg', label: 'Analytics' },
-  //   { href: '/users', icon: '/icons/person.svg', label: 'Staff' },
-  //   { href: '/products', icon: '/icons/Tag.svg', label: 'Products' },
-  //   { href: '/ingredients', icon: '/icons/flour.svg', label: 'Ingredients' },
-  //   { href: '/audit-logs', icon: '/icons/Book.svg', label: 'Audit' },
-  //   { href: '/dashboard', icon: '/icons/menu.svg', label: 'Dashboard', active: true },
-  // ]
+  function fmt(d: string) {
+    return new Date(d).toLocaleDateString('en-PH', {
+      month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Manila',
+    })
+  }
+
+  function peso(n: number) {
+    return `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
 
   if (loading) {
     return (
@@ -109,6 +214,18 @@ export default function ManagerDashboard() {
       </div>
     )
   }
+
+  const statCards = [
+    { label: "Today's Sales",        value: peso(todaySales),                        sub: null },
+    { label: 'Net Income Today',      value: peso(netIncome),                         sub: netIncome < 0 ? 'Loss' : 'Profit', loss: netIncome < 0 },
+    { label: 'Cash Out Today',        value: peso(cashOutToday),                      sub: null },
+    { label: 'Production Today',      value: `${todayProduction} pcs`,               sub: null },
+    { label: 'Transfers Today',       value: `${pendingTransfers}`,                  sub: 'batches' },
+    { label: 'Low Stock Items',       value: `${lowStockCount}`,                     sub: null },
+    { label: 'Out of Stock',          value: `${outOfStockCount}`,                   sub: null, danger: outOfStockCount > 0 },
+    { label: "Today's Disposals",     value: `${todayDisposalCount} entries`,        sub: `${todayDisposalQty} pcs total` },
+    { label: 'Pending Requests',      value: `${pendingCount}`,                      sub: null },
+  ]
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
@@ -143,8 +260,7 @@ export default function ManagerDashboard() {
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
 
-        {/* LEFT SIDEBAR */}
-      <ManagerSidebar />
+        <ManagerSidebar />
 
         {/* MAIN CONTENT */}
         <div className="relative z-10 flex-1 p-6 overflow-y-auto">
@@ -157,22 +273,26 @@ export default function ManagerDashboard() {
             {new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
 
-          {/* STAT CARDS */}
+          {/* STAT CARDS — 3-col grid */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Today's Sales</p>
-              <p className="text-4xl font-black text-white">
-                ₱{todaySales.toLocaleString('en-PH', { minimumFractionDigits: 0 })}
-              </p>
-            </div>
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Low Stock Items</p>
-              <p className="text-4xl font-black text-white">{lowStockCount}</p>
-            </div>
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Pending Requests</p>
-              <p className="text-4xl font-black text-white">{pendingCount}</p>
-            </div>
+            {statCards.map(card => (
+              <div
+                key={card.label}
+                className="rounded-sm p-5"
+                style={{
+                  backgroundColor: (card as any).danger ? '#7B1111' : '#220901',
+                  boxShadow: '4px 4px 10px rgba(0,0,0,0.3)',
+                }}
+              >
+                <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">{card.label}</p>
+                <p className={`text-3xl font-black ${(card as any).loss ? 'text-red-400' : 'text-white'}`}>
+                  {card.value}
+                </p>
+                {card.sub && (
+                  <p className="text-white text-xs mt-1 opacity-50">{card.sub}</p>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* CASH REGISTER */}
@@ -182,8 +302,8 @@ export default function ManagerDashboard() {
             </div>
           )}
 
-          {/* TABLES */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* TABLES — row 1: Low Stock + Recent Sales */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
 
             {/* Low Stock Alert */}
             <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
@@ -204,11 +324,11 @@ export default function ManagerDashboard() {
                   {lowStockProducts.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-5 py-10 text-center text-gray-400 text-sm">
-                        All stock levels are good 🎉
+                        No low stock alerts
                       </td>
                     </tr>
                   ) : (
-                    lowStockProducts.map((product) => (
+                    lowStockProducts.map(product => (
                       <tr key={product.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3 text-sm font-semibold text-gray-800">{product.name}</td>
                         <td className="px-5 py-3">
@@ -257,7 +377,7 @@ export default function ManagerDashboard() {
                       </td>
                     </tr>
                   ) : (
-                    recentSales.map((sale) => (
+                    recentSales.map(sale => (
                       <tr key={sale.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                         <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
                           {new Date(sale.sale_date).toLocaleDateString('en-PH', {
@@ -270,15 +390,101 @@ export default function ManagerDashboard() {
                           {(sale.cashier as any)?.full_name || '—'}
                         </td>
                         <td className="px-5 py-3">
-                          <span className={`text-xs font-bold px-3 py-1 rounded-full text-white ${
-                            sale.payment_method === 'cash' ? 'bg-blue-500' : 'bg-green-500'
-                          }`}>
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full text-white ${sale.payment_method === 'cash' ? 'bg-blue-500' : 'bg-green-500'}`}>
                             {sale.payment_method === 'cash' ? 'Cash' : 'Online'}
                           </span>
                         </td>
                         <td className="px-5 py-3 text-sm font-black text-gray-900">
-                          ₱{Number(sale.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          {peso(sale.total_amount)}
                         </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* TABLES — row 2: Top Products + Today's Disposals */}
+          <div className="grid grid-cols-2 gap-4">
+
+            {/* Top Selling Products Today */}
+            <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+              <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                <h2 className="font-bold text-white">Top Selling Products Today</h2>
+                <span className="ml-auto text-xs text-white opacity-60">by qty</span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                    <th className="px-5 py-3 font-semibold">#</th>
+                    <th className="px-5 py-3 font-semibold">Product</th>
+                    <th className="px-5 py-3 font-semibold">Qty Sold</th>
+                    <th className="px-5 py-3 font-semibold">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-gray-400 text-sm">
+                        No sales yet today
+                      </td>
+                    </tr>
+                  ) : (
+                    topProducts.map((p, i) => (
+                      <tr key={p.product_name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3">
+                          <span className="text-xs font-black text-white w-5 h-5 rounded-full flex items-center justify-center"
+                            style={{ backgroundColor: i === 0 ? '#F5A623' : i === 1 ? '#9CA3AF' : i === 2 ? '#D97706' : '#E5E7EB', color: i < 3 ? 'white' : '#6B7280' }}>
+                            {i + 1}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-sm font-semibold text-gray-800">{p.product_name}</td>
+                        <td className="px-5 py-3 text-sm font-black text-purple-600">{p.total_qty} pcs</td>
+                        <td className="px-5 py-3 text-sm font-bold text-gray-700">{peso(p.total_revenue)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Today's Disposals */}
+            <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+              <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#7B1111' }}>
+                <h2 className="font-bold text-white">Today's Disposals</h2>
+                <span className="ml-auto text-xs text-white opacity-60">{todayDisposals.length} entries · {todayDisposalQty} pcs</span>
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                    <th className="px-5 py-3 font-semibold">Product</th>
+                    <th className="px-5 py-3 font-semibold">Type</th>
+                    <th className="px-5 py-3 font-semibold">Qty</th>
+                    <th className="px-5 py-3 font-semibold">Reason</th>
+                    <th className="px-5 py-3 font-semibold">By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayDisposals.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">
+                        No disposals today
+                      </td>
+                    </tr>
+                  ) : (
+                    todayDisposals.map(d => (
+                      <tr key={d.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                        <td className="px-5 py-3 text-sm font-semibold text-gray-800">{d.products?.name || '—'}</td>
+                        <td className="px-5 py-3">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: d.type === 'pullout' ? '#EF4444' : '#7C3AED' }}>
+                            {d.type === 'pullout' ? 'Pull-out' : 'OTH'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-sm font-black text-red-500">-{d.quantity}</td>
+                        <td className="px-5 py-3 text-xs text-gray-500 max-w-xs truncate">{d.reason}</td>
+                        <td className="px-5 py-3 text-xs text-gray-500">{d.profiles?.full_name || '—'}</td>
                       </tr>
                     ))
                   )}
