@@ -17,6 +17,7 @@ import TransferStockModal from '@/components/TransferStockModal'
 import { createDisposal, PULLOUT_REASONS, OTH_REASONS, type DisposalType } from '@/lib/disposals'
 import { signOut } from '@/lib/auth'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 export default function InventoryPage() {
   const router = useRouter()
@@ -49,6 +50,7 @@ export default function InventoryPage() {
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { setCurrentPage(1) }, [search, filterStatus, filterCategory])
+  useRealtimeRefresh(['products', 'inventory_transactions', 'inventory_transfers', 'stock_disposals'], () => loadData(userRole))
 
   async function checkAuth() {
     const user = await getCurrentUser()

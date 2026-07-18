@@ -17,6 +17,7 @@ import type { Product } from '@/lib/supabase'
 import ProductGrid from '@/components/ProductGrid'
 import Receipt from '@/components/Receipt'
 import CashRegisterWidget from '@/components/CashRegisterWidget'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 // Convert a datetime-local string (treated as Asia/Manila) to UTC ISO string
 function manilaLocalToUTC(localStr: string): string {
@@ -72,7 +73,8 @@ export default function POSPage() {
   const [restockSuccess, setRestockSuccess] = useState('')
 
   useEffect(() => { checkAuth() }, [])
-
+  useRealtimeRefresh(['products', 'sales', 'sale_items'], loadData)
+  
   async function checkAuth() {
     const user = await getCurrentUser()
     if (!user) { router.push('/login'); return }

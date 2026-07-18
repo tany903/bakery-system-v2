@@ -16,6 +16,7 @@ import { getAllProducts } from '@/lib/products'
 import type { Product } from '@/lib/supabase'
 import ProductionRecordCard from '@/components/ProductionRecordCard'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 export default function ProductionDashboardPage() {
   const router = useRouter()
@@ -37,6 +38,7 @@ export default function ProductionDashboardPage() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => { checkAuth() }, [])
+  useRealtimeRefresh(['production', 'ingredients', 'products'], loadData)
 
   async function checkAuth() {
     const user = await getCurrentUser()

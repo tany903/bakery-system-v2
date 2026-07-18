@@ -19,6 +19,7 @@ import type { Product, Category } from '@/lib/supabase'
 import ProductCard from '@/components/ProductCard'
 import ProductForm, { type ProductFormData } from '@/components/ProductForm'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 export default function ProductsPage() {
   const router = useRouter()
@@ -44,6 +45,7 @@ export default function ProductsPage() {
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { if (!loading) loadProducts() }, [filterCategory, filterStock, loading])
+  useRealtimeRefresh(['products', 'categories'], () => { loadProducts(); loadCategories() })
 
   async function checkAuth() {
     const user = await getCurrentUser()

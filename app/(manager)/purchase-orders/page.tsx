@@ -14,6 +14,7 @@ import {
   cancelPurchaseOrder, receivePurchaseOrder,
   type PurchaseOrderWithDetails, type PurchaseOrderItem, type Supplier, type NewPOItem,
 } from '@/lib/purchase-orders'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
 const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -103,6 +104,7 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { setPage(1) }, [statusFilter, search])
+  useRealtimeRefresh(['purchase_orders', 'purchase_order_items', 'suppliers', 'ingredients', 'expense_categories'], loadAll)
 
   async function checkAuth() {
     const user = await getCurrentUser()

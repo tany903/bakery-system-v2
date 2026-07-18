@@ -6,6 +6,7 @@ import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import CashRegisterWidget from '@/components/CashRegisterWidget'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 interface LowStockProduct {
   id: string
@@ -66,6 +67,10 @@ export default function ManagerDashboard() {
   const [todayDisposals, setTodayDisposals] = useState<TodayDisposal[]>([])
 
   useEffect(() => { checkAuthAndLoad() }, [])
+  useRealtimeRefresh(
+  ['sales', 'sale_items', 'products', 'restock_requests', 'expenses', 'stock_disposals', 'production', 'inventory_transfers', 'cash_register'],
+  loadData
+)
 
   async function checkAuthAndLoad() {
     try {
