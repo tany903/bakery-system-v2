@@ -15,6 +15,7 @@ import { getAllProducts, getAllCategories } from '@/lib/products'
 import type { Product, Category } from '@/lib/supabase'
 import FulfillRequestModal from '@/components/FulfillRequestModal'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 
 const PAGE_SIZE = 9
 const DECLINE_REASONS = ['No stocks', 'Repeat order', 'Others']
@@ -80,6 +81,7 @@ export default function RestockRequestsPage() {
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { filterRequests() }, [requests, statusFilter, typeFilter, dateFilter, dateFrom, dateTo, search, categoryFilter])
   useEffect(() => { setPage(1) }, [statusFilter, typeFilter, dateFilter, dateFrom, dateTo, search, categoryFilter])
+  useRealtimeRefresh(['restock_requests', 'restock_request_items'], loadRequests)
 
   async function checkAuth() {
     const user = await getCurrentUser()
