@@ -6,7 +6,7 @@ import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import {
   getSalesSummary,
   getExpenseVsRevenue,
-  getRestockPredictions,
+  getRestockRecommendations,
   getSalesTrend,
   getBestSellingDays,
   exportSalesToCSV,
@@ -18,13 +18,13 @@ import {
   type WeeklyBreakdown,
   type SalesSummary,
   type ExpenseVsRevenue,
-  type RestockPrediction,
+  type RestockRecommendation,
   type SalesTrend,
   type BestSellingDay,
   type DailySalesBreakdown, //watch
 } from '@/lib/analytics'
 import {
-  BarChart, Bar, ComposedChart, Area, Cell,
+  BarChart, Bar, ComposedChart, Area, Cell, Line, LineChart,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import ManagerSidebar from '@/components/ManagerSidebar'
@@ -161,7 +161,7 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>('month')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [predictions, setPredictions] = useState<RestockPrediction[]>([])
+  const [recommendations, setRecommendations] = useState<RestockRecommendation[]>([])
   const [trend, setTrend] = useState<SalesTrend | null>(null)
   const [bestDays, setBestDays] = useState<BestSellingDay[]>([])
   const [disposalStats, setDisposalStats] = useState<DisposalAnalytics | null>(null)
@@ -209,8 +209,8 @@ export default function AnalyticsPage() {
 
   async function loadPrescriptive() {
     try {
-      const [predictionsData, bestDaysData] = await Promise.all([getRestockPredictions(), getBestSellingDays()])
-      setPredictions(predictionsData); setBestDays(bestDaysData)
+      const [recommendationsData, bestDaysData] = await Promise.all([getRestockRecommendations(), getBestSellingDays()])
+      setRecommendations(recommendationsData); setBestDays(bestDaysData)
     } catch {}
   }
 
@@ -768,17 +768,17 @@ export default function AnalyticsPage() {
               <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
-                  <h3 className="font-black text-gray-900">Restock Predictions</h3>
+                  <h3 className="font-black text-gray-900">Restock Recommendations</h3>
                 </div>
-                <p className="text-xs text-gray-400 mb-4">Based on avg daily sales from the last 14 days.</p>
-                {predictions.length === 0 ? (
+                <p className="text-xs text-gray-400 mb-4">Forecasted demand, verified against actual sales, prescribing a restock action.</p>
+                {recommendations.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
                     <div className="text-4xl mb-2"></div>
-                    <p className="text-sm">Not enough sales data yet.</p>
+                    <p className="text-sm">Nothing needs restocking right now.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {predictions.map(p => (
+                    {recommendations.map(p => (
                       <div key={p.product_name} className={`p-4 rounded-sm border ${
                         p.urgency === 'critical' ? 'bg-red-50 border-red-200' :
                         p.urgency === 'warning' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'
@@ -791,18 +791,39 @@ export default function AnalyticsPage() {
                               {p.urgency === 'ok' && <span></span>}
                               {p.product_name}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">Stock: {p.current_shop_stock} pcs • Avg: {p.avg_daily_sales}/day</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Stock: {p.current_shop_stock} pcs
+                              {p.method === 'forecast'
+                                ? ` • Forecast: ${p.forecast_daily_demand}/day`
+                                : ` • Min threshold: ${p.minimum_threshold} pcs`}
+                            </p>
                             {p.days_until_stockout !== null && (
                               <p className={`text-xs font-semibold mt-0.5 ${p.urgency === 'critical' ? 'text-red-600' : p.urgency === 'warning' ? 'text-yellow-600' : 'text-gray-400'}`}>
                                 {p.days_until_stockout === 0 ? 'Stockout today!' : `Runs out in ~${p.days_until_stockout} day${p.days_until_stockout !== 1 ? 's' : ''}`}
                               </p>
                             )}
+                            {p.method === 'threshold_fallback' && (
+                              <p className="text-xs text-gray-400 mt-0.5 italic">Gathering sales data — using minimum-stock rule for now</p>
+                            )}
+                            {p.method === 'forecast' && p.accuracy_mape !== null && (
+                              <p className="text-xs text-gray-400 mt-0.5">Forecast accuracy: {Math.max(0, 100 - p.accuracy_mape).toFixed(0)}%</p>
+                            )}
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-black" style={{ color: '#F5A623' }}>+{p.recommended_restock} pcs</p>
-                            <p className="text-xs text-gray-400">7-day supply</p>
+                            <p className="text-xs text-gray-400">{p.method === 'forecast' ? '7-day supply' : 'up to threshold'}</p>
                           </div>
                         </div>
+                        {p.method === 'forecast' && p.prediction_history.length > 1 && (
+                          <div className="mt-3 h-16">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={p.prediction_history}>
+                                <Line type="monotone" dataKey="actual" stroke="#7B1111" strokeWidth={1.5} dot={false} />
+                                <Line type="monotone" dataKey="predicted" stroke="#F5A623" strokeWidth={1.5} strokeDasharray="3 3" dot={false} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

@@ -34,13 +34,23 @@ export interface ExpenseVsRevenue {
   net: number
 }
 
-export interface RestockPrediction {
+export interface PredictionPoint {
+  date: string
+  predicted: number
+  actual: number
+}
+
+export interface RestockRecommendation {
   product_name: string
   current_shop_stock: number
-  avg_daily_sales: number
+  minimum_threshold: number
+  forecast_daily_demand: number | null
   days_until_stockout: number | null
   recommended_restock: number
   urgency: 'critical' | 'warning' | 'ok'
+  accuracy_mape: number | null
+  prediction_history: PredictionPoint[]
+  method: 'forecast' | 'threshold_fallback'
 }
 
 export interface SalesTrend {
@@ -169,7 +179,62 @@ export async function getExpenseVsRevenue(): Promise<ExpenseVsRevenue[]> {
 // PRESCRIPTIVE ANALYTICS
 // =============================================
 
-export async function getRestockPredictions(): Promise<RestockPrediction[]> {
+// Minimum number of days with at least one sale before we trust the forecast
+// over the simple threshold rule (cold-start guard).
+const MIN_SALE_DAYS_FOR_FORECAST = 7
+// Exponential smoothing factor. 0.3 is the standard default for demand with
+// moderate day-to-day variability (matches bakery weekday/weekend swings)
+// without overreacting to a single unusual day.
+const SMOOTHING_ALPHA = 0.3
+// Backtest window used for both forecasting and verifying accuracy.
+const HISTORY_WINDOW_DAYS = 30
+const LEAD_TIME_DAYS = 7
+
+function buildDailySeries(dailyQuantities: { [date: string]: number }, windowDays: number): number[] {
+  const series: number[] = []
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = d.toISOString().split('T')[0]
+    series.push(dailyQuantities[key] || 0)
+  }
+  return series
+}
+
+// Stage 1 (Predict) + Stage 2 (Verify): run exponential smoothing over the
+// historical series, scoring each day's forecast against that day's actual
+// sales as it becomes known (this is the "verify accuracy against new data"
+// step), then return the next-day forecast plus the accuracy score.
+function runExponentialSmoothing(series: number[]): {
+  nextForecast: number
+  mape: number | null
+  history: PredictionPoint[]
+} {
+  const history: PredictionPoint[] = []
+  let forecast = series[0]
+  const errors: number[] = []
+
+  for (let t = 1; t < series.length; t++) {
+    const actual = series[t]
+    history.push({
+      date: `day-${t}`,
+      predicted: Math.round(forecast * 10) / 10,
+      actual,
+    })
+    if (actual > 0) {
+      errors.push(Math.abs(actual - forecast) / actual)
+    }
+    forecast = SMOOTHING_ALPHA * actual + (1 - SMOOTHING_ALPHA) * forecast
+  }
+
+  const mape = errors.length > 0
+    ? Math.round((errors.reduce((a, b) => a + b, 0) / errors.length) * 1000) / 10
+    : null
+
+  return { nextForecast: forecast, mape, history }
+}
+
+export async function getRestockRecommendations(): Promise<RestockRecommendation[]> {
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, name, shop_current_stock, shop_minimum_threshold')
@@ -177,29 +242,62 @@ export async function getRestockPredictions(): Promise<RestockPrediction[]> {
 
   if (productsError) throw productsError
 
-  const twoWeeksAgo = new Date()
-  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+  const windowStart = new Date()
+  windowStart.setDate(windowStart.getDate() - HISTORY_WINDOW_DAYS)
 
   const { data: saleItems, error: itemsError } = await supabase
     .from('sale_items')
     .select(`*, sales!inner (sale_date)`)
-    .gte('sales.sale_date', twoWeeksAgo.toISOString())
+    .gte('sales.sale_date', windowStart.toISOString())
 
   if (itemsError) throw itemsError
 
-  const productSales: { [key: string]: number } = {}
+  // Build a per-product, per-day quantity map so we can fill in zero-sale days.
+  const dailyQuantitiesByProduct: { [productId: string]: { [date: string]: number } } = {}
+  const saleDaysByProduct: { [productId: string]: Set<string> } = {}
   ;(saleItems || []).forEach((item: any) => {
-    productSales[item.product_id] = (productSales[item.product_id] || 0) + item.quantity
+    const date = item.sales.sale_date.split('T')[0]
+    if (!dailyQuantitiesByProduct[item.product_id]) dailyQuantitiesByProduct[item.product_id] = {}
+    if (!saleDaysByProduct[item.product_id]) saleDaysByProduct[item.product_id] = new Set()
+    dailyQuantitiesByProduct[item.product_id][date] = (dailyQuantitiesByProduct[item.product_id][date] || 0) + item.quantity
+    saleDaysByProduct[item.product_id].add(date)
   })
 
   return (products || [])
     .map(product => {
-      const totalSold = productSales[product.id] || 0
-      const avgDailySales = totalSold / 14
-      const daysUntilStockout = avgDailySales > 0
-        ? Math.floor(product.shop_current_stock / avgDailySales)
+      const saleDayCount = saleDaysByProduct[product.id]?.size || 0
+      const hasEnoughHistory = saleDayCount >= MIN_SALE_DAYS_FOR_FORECAST
+
+      if (!hasEnoughHistory) {
+        // Cold start: prescribe off the simple reorder-point rule instead of forecasting.
+        const belowThreshold = product.shop_current_stock <= product.shop_minimum_threshold
+        const recommended = belowThreshold ? Math.max(0, product.shop_minimum_threshold - product.shop_current_stock) : 0
+
+        let urgency: 'critical' | 'warning' | 'ok' = 'ok'
+        if (product.shop_current_stock === 0) urgency = 'critical'
+        else if (belowThreshold) urgency = 'warning'
+
+        return {
+          product_name: product.name,
+          current_shop_stock: product.shop_current_stock,
+          minimum_threshold: product.shop_minimum_threshold,
+          forecast_daily_demand: null,
+          days_until_stockout: null,
+          recommended_restock: recommended,
+          urgency,
+          accuracy_mape: null,
+          prediction_history: [],
+          method: 'threshold_fallback' as const,
+        }
+      }
+
+      const series = buildDailySeries(dailyQuantitiesByProduct[product.id] || {}, HISTORY_WINDOW_DAYS)
+      const { nextForecast, mape, history } = runExponentialSmoothing(series)
+      const forecastDailyDemand = Math.round(nextForecast * 10) / 10
+      const daysUntilStockout = forecastDailyDemand > 0
+        ? Math.floor(product.shop_current_stock / forecastDailyDemand)
         : null
-      const recommended = Math.ceil(avgDailySales * 7)
+      const recommended = Math.ceil(forecastDailyDemand * LEAD_TIME_DAYS)
 
       let urgency: 'critical' | 'warning' | 'ok' = 'ok'
       if (daysUntilStockout !== null && daysUntilStockout <= 2) urgency = 'critical'
@@ -209,13 +307,17 @@ export async function getRestockPredictions(): Promise<RestockPrediction[]> {
       return {
         product_name: product.name,
         current_shop_stock: product.shop_current_stock,
-        avg_daily_sales: Math.round(avgDailySales * 10) / 10,
+        minimum_threshold: product.shop_minimum_threshold,
+        forecast_daily_demand: forecastDailyDemand,
         days_until_stockout: daysUntilStockout,
         recommended_restock: recommended,
         urgency,
+        accuracy_mape: mape,
+        prediction_history: history.slice(-14), // last 14 days is plenty for the chart
+        method: 'forecast' as const,
       }
     })
-    .filter(p => p.avg_daily_sales > 0)
+    .filter(p => p.method === 'forecast' ? p.forecast_daily_demand! > 0 : p.recommended_restock > 0)
     .sort((a, b) => ({ critical: 0, warning: 1, ok: 2 }[a.urgency] - { critical: 0, warning: 1, ok: 2 }[b.urgency]))
 }
 
@@ -524,4 +626,3 @@ export async function getDailySalesBreakdown(date: Date): Promise<DailySalesBrea
     voidedRevenue,
   }
 }
-
