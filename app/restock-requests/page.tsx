@@ -17,6 +17,7 @@ import FulfillRequestModal from '@/components/FulfillRequestModal'
 import ManagerSidebar from '@/components/ManagerSidebar'
 
 const PAGE_SIZE = 9
+const DECLINE_REASONS = ['No stocks', 'Repeat order', 'Others']
 
 // Convert a datetime-local string (treated as Asia/Manila) to UTC ISO string
 function manilaLocalToUTC(localStr: string): string {
@@ -69,6 +70,12 @@ export default function RestockRequestsPage() {
   const [newOrderNotes, setNewOrderNotes] = useState('')
   const [newDeliveryDate, setNewDeliveryDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Decline modal state
+  const [showDeclineModal, setShowDeclineModal] = useState(false)
+  const [declineTargetId, setDeclineTargetId] = useState<string | null>(null)
+  const [declineReason, setDeclineReason] = useState('')
+  const [declineCustomReason, setDeclineCustomReason] = useState('')
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { filterRequests() }, [requests, statusFilter, typeFilter, dateFilter, dateFrom, dateTo, search, categoryFilter])
@@ -177,13 +184,27 @@ export default function RestockRequestsPage() {
     } finally { setTimeout(() => { setSuccess(''); setError('') }, 3000) }
   }
 
-  async function handleDecline(requestId: string) {
-    const reason = prompt('Enter reason for declining:')
-    if (!reason) return
+  function handleDecline(requestId: string) {
+    setDeclineTargetId(requestId)
+    setDeclineReason(DECLINE_REASONS[0])
+    setDeclineCustomReason('')
+    setShowDeclineModal(true)
+  }
+
+  async function handleDeclineConfirm() {
+    if (!declineTargetId) return
+    const reason = declineReason === 'Others' ? declineCustomReason.trim() : declineReason
+    if (!reason) { setError('Please provide a reason'); return }
     setError(''); setSuccess('')
-    try { await declineRequest(requestId, userId, reason); setSuccess('Request declined'); await loadRequests() }
-    catch (err: any) { setError(err.message || 'Failed to decline request') }
-    finally { setTimeout(() => { setSuccess(''); setError('') }, 3000) }
+    try {
+      await declineRequest(declineTargetId, userId, reason)
+      setSuccess('Request declined')
+      setShowDeclineModal(false)
+      setDeclineTargetId(null)
+      await loadRequests()
+    } catch (err: any) {
+      setError(err.message || 'Failed to decline request')
+    } finally { setTimeout(() => { setSuccess(''); setError('') }, 3000) }
   }
 
   async function openNewRequestModal() {
@@ -719,6 +740,59 @@ export default function RestockRequestsPage() {
     />
   ) : null
 
+  const declineModal = showDeclineModal ? (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-sm w-full max-w-md" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
+        <div className="px-6 py-4" style={{ backgroundColor: '#220901' }}>
+          <h2 className="text-white font-black text-lg">Decline Request</h2>
+          <p className="text-white text-xs opacity-50 mt-0.5">Select a reason for declining</p>
+        </div>
+
+        <div className="px-6 py-5 space-y-3">
+          <div>
+            <label className={labelClass}>Reason *</label>
+            <select
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              className={inputClass}
+            >
+              {DECLINE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+
+          {declineReason === 'Others' && (
+            <div>
+              <label className={labelClass}>Specify Reason *</label>
+              <textarea
+                value={declineCustomReason}
+                onChange={e => setDeclineCustomReason(e.target.value)}
+                rows={2}
+                placeholder="Enter a reason..."
+                className={inputClass}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+          <button
+            onClick={handleDeclineConfirm}
+            className="flex-1 py-2 rounded-sm font-bold text-white text-sm"
+            style={{ backgroundColor: '#EF4444' }}
+          >
+            Confirm Decline
+          </button>
+          <button
+            onClick={() => { setShowDeclineModal(false); setDeclineTargetId(null) }}
+            className="px-5 py-2 rounded-sm border border-gray-300 text-gray-900 text-sm font-semibold hover:bg-gray-100"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5A623' }}>
@@ -765,6 +839,7 @@ export default function RestockRequestsPage() {
         </div>
         <div className="flex flex-1 relative"><Watermark />{mainContent}</div>
         {fulfillModal}
+        {declineModal}
       </div>
     )
   }
@@ -779,6 +854,7 @@ export default function RestockRequestsPage() {
       </div>
       {newRequestModal}
       {fulfillModal}
+      {declineModal}
     </div>
   )
 }
