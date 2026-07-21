@@ -835,7 +835,7 @@ export default function AnalyticsPage() {
                   <img src="/icons/Bar_chart.svg" alt="" className="w-5 h-5 opacity-50" />
                   <h3 className="font-black text-gray-900">Best Days to Stock Up</h3>
                 </div>
-                <p className="text-xs text-gray-400 mb-4">Based on avg revenue per day over the last 30 days.</p>
+                <p className="text-xs text-gray-400 mb-4">Based on avg units sold per day over the last 30 days.</p>
                 {bestDays.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
                     <div className="text-4xl mb-2"></div>
@@ -844,14 +844,14 @@ export default function AnalyticsPage() {
                 ) : (
                   <div className="space-y-3">
                     {bestDays.map((d, index) => {
-                      const pct = bestDays[0].avgRevenue > 0 ? Math.round((d.avgRevenue / bestDays[0].avgRevenue) * 100) : 0
+                      const pct = bestDays[0].avgUnitsSold > 0 ? Math.round((d.avgUnitsSold / bestDays[0].avgUnitsSold) * 100) : 0
                       return (
                         <div key={d.day}>
                           <div className="flex justify-between text-xs font-semibold mb-1">
                             <span className="text-gray-700">
                               {index === 0 ? ' ' : index === 1 ? ' ' : index === 2 ? ' ' : '    '}{d.day}
                             </span>
-                            <span className="text-gray-500">₱{d.avgRevenue.toLocaleString('en-PH')} avg</span>
+                            <span className="text-gray-500">{d.avgUnitsSold.toLocaleString('en-PH')} pcs avg</span>
                           </div>
                           <div className="w-full bg-gray-100 rounded-full h-2">
                             <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: '#7B1111' }} />

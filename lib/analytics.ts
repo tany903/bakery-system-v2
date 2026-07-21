@@ -62,7 +62,7 @@ export interface SalesTrend {
 
 export interface BestSellingDay {
   day: string
-  avgRevenue: number
+  avgUnitsSold: number
 }
 
 // =============================================
@@ -374,26 +374,38 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-  const { data: sales, error } = await supabase
-    .from('sales').select('sale_date, total_amount')
-    .gte('sale_date', thirtyDaysAgo.toISOString())
+  // Quantity sold, not peso revenue: one big custom order shouldn't make a
+  // day look like it needs more stock when it actually just needs one product.
+  const { data: saleItems, error } = await supabase
+    .from('sale_items')
+    .select(`quantity, sales!inner (sale_date)`)
+    .gte('sales.sale_date', thirtyDaysAgo.toISOString())
 
   if (error) throw error
 
-  const dayMap: { [key: string]: { total: number; count: number } } = {}
   const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+  const unitsByDay: { [key: string]: number } = {}
 
-  ;(sales || []).forEach(s => {
-    const day = dayNames[new Date(s.sale_date).getDay()]
-    if (!dayMap[day]) dayMap[day] = { total: 0, count: 0 }
-    dayMap[day].total += Number(s.total_amount)
-    dayMap[day].count += 1
+  ;(saleItems || []).forEach((item: any) => {
+    const day = dayNames[new Date(item.sales.sale_date).getDay()]
+    unitsByDay[day] = (unitsByDay[day] || 0) + item.quantity
   })
 
+  // Divide by how many *calendar days* of each weekday actually occurred in
+  // the window (4 or 5, not the transaction count) so this is a true
+  // per-day average rather than a per-transaction average.
+  const occurrencesByDay: { [key: string]: number } = {}
+  for (let i = 0; i < 30; i++) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const day = dayNames[d.getDay()]
+    occurrencesByDay[day] = (occurrencesByDay[day] || 0) + 1
+  }
+
   return dayNames
-    .filter(day => dayMap[day])
-    .map(day => ({ day, avgRevenue: Math.round(dayMap[day].total / dayMap[day].count) }))
-    .sort((a, b) => b.avgRevenue - a.avgRevenue)
+    .filter(day => unitsByDay[day])
+    .map(day => ({ day, avgUnitsSold: Math.round(unitsByDay[day] / occurrencesByDay[day]) }))
+    .sort((a, b) => b.avgUnitsSold - a.avgUnitsSold)
 }
 
 // =============================================
