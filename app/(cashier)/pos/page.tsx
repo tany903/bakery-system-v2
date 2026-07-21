@@ -10,7 +10,7 @@ import {
   type NewRestockItem,
 } from '@/lib/restock-requests'
 import {
-  createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal,
+  createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal, getEffectivePrice,
   type CartItem, type SalesStats,
 } from '@/lib/sales'
 import type { Product } from '@/lib/supabase'
@@ -42,6 +42,7 @@ export default function POSPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState('')
+  const [cashierName, setCashierName] = useState('')
   const [products, setProducts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -74,7 +75,7 @@ export default function POSPage() {
 
   useEffect(() => { checkAuth() }, [])
   useRealtimeRefresh(['products', 'sales', 'sale_items'], loadData)
-  
+
   async function checkAuth() {
     const user = await getCurrentUser()
     if (!user) { router.push('/login'); return }
@@ -83,6 +84,7 @@ export default function POSPage() {
       router.push('/login'); return
     }
     setUserId(user.id)
+    setCashierName(profile.full_name || 'Unknown')
     await loadData()
     setLoading(false)
   }
@@ -190,13 +192,28 @@ export default function POSPage() {
     if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
     setProcessing(true); setError('')
     try {
-      const sale = await createSale(cart, paymentMethod, userId)
-      const { data: fullSale } = await supabase
-        .from('sales')
-        .select('*, sale_items (*), profiles (full_name)')
-        .eq('id', sale.id)
-        .single()
-      setLastSale(fullSale)
+      // Snapshot cart before clearing so receipt can reference it
+      const cartSnapshot = cart
+      const sale = await createSale(cartSnapshot, paymentMethod, userId)
+
+      // Build receipt from local data to avoid PostgREST profiles-join issues
+      // that can silently fail and prevent the receipt from showing.
+      const receiptSale = {
+        ...sale,
+        sale_items: cartSnapshot.map(item => ({
+          id: item.product.id,
+          sale_id: sale.id,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          quantity: item.quantity,
+          unit_price: getEffectivePrice(item),
+          subtotal: getItemSubtotal(item),
+          created_at: sale.created_at,
+        })),
+        profiles: { full_name: cashierName || 'Unknown' },
+      }
+
+      setLastSale(receiptSale)
       setShowReceipt(true)
       clearCart()
       await loadData()
@@ -239,7 +256,6 @@ export default function POSPage() {
   function getDeliveryDateInfo(deliveryDate: string | null | undefined) {
     if (!deliveryDate) return null
 
-    // Parse correctly: UTC ISO from DB, or datetime-local from input (Manila time)
     let due: Date
     if (deliveryDate.endsWith('Z') || deliveryDate.includes('+')) {
       due = new Date(deliveryDate)
@@ -257,12 +273,12 @@ export default function POSPage() {
     const timeStr = due.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
     const dateStr = due.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })
 
-    if (diffMs < 0)       return { label: `Overdue — ${dateStr} ${timeStr}`,                    color: '#EF4444', bg: '#FEE2E2' }
-    if (diffHours <= 3)   return { label: `Needed Soon — by ${timeStr}`,                        color: '#DC2626', bg: '#FEE2E2' }
-    if (diffHours <= 24)  return { label: `Needed Today — by ${timeStr}`,                       color: '#DC2626', bg: '#FEE2E2' }
-    if (diffDays <= 1)    return { label: `Needed Tomorrow — by ${timeStr}`,                    color: '#D97706', bg: '#FEF3C7' }
-    if (diffDays <= 3)    return { label: `Needed in ${diffDays}d — by ${timeStr}`,             color: '#D97706', bg: '#FEF3C7' }
-    return                { label: `Needed by ${dateStr} ${timeStr}`,                           color: '#6B7280', bg: '#F3F4F6' }
+    if (diffMs < 0)       return { label: `Overdue — ${dateStr} ${timeStr}`,             color: '#EF4444', bg: '#FEE2E2' }
+    if (diffHours <= 3)   return { label: `Needed Soon — by ${timeStr}`,                 color: '#DC2626', bg: '#FEE2E2' }
+    if (diffHours <= 24)  return { label: `Needed Today — by ${timeStr}`,                color: '#DC2626', bg: '#FEE2E2' }
+    if (diffDays <= 1)    return { label: `Needed Tomorrow — by ${timeStr}`,             color: '#D97706', bg: '#FEF3C7' }
+    if (diffDays <= 3)    return { label: `Needed in ${diffDays}d — by ${timeStr}`,      color: '#D97706', bg: '#FEF3C7' }
+    return                { label: `Needed by ${dateStr} ${timeStr}`,                    color: '#6B7280', bg: '#F3F4F6' }
   }
 
   async function handleRestockSubmit(e: React.FormEvent) {
@@ -276,7 +292,6 @@ export default function POSPage() {
     }))
     setRestockSubmitting(true); setRestockError('')
     try {
-      // Convert Manila local datetime to UTC before saving
       const deliveryDateUTC = restockDeliveryDate ? manilaLocalToUTC(restockDeliveryDate) : undefined
       await createRestockRequest(
         items,
@@ -378,7 +393,6 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto">
             {filteredProducts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                {/* <div className="text-5xl mb-3">🔍</div> */}
                 <p className="font-semibold">No products found</p>
               </div>
             ) : (
@@ -410,9 +424,7 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
-                {/* <div className="text-5xl mb-3">🛒</div> */}
                 <p className="text-sm font-semibold">Cart is empty</p>
-                {/* <p className="text-xs mt-1">Tap a product to add it</p> */}
               </div>
             ) : (
               <div className="space-y-3">
@@ -676,7 +688,6 @@ export default function POSPage() {
                   </button>
                 )}
 
-                {/* Needed By + Order Notes */}
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="block text-xs font-bold text-gray-500 mb-1">
