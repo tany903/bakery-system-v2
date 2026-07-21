@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import { getAllProducts } from '@/lib/products'
+import { getAllAuthLogs, type AuthLogEntry } from '@/lib/auth-logs'
 import { supabase } from '@/lib/supabase'
 import ManagerSidebar from '@/components/ManagerSidebar'
 
@@ -23,6 +24,8 @@ interface Transaction {
 export default function AuditLogsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'inventory' | 'activity'>('inventory')
+
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [filtered, setFiltered] = useState<Transaction[]>([])
   const [products, setProducts] = useState<any[]>([])
@@ -31,7 +34,14 @@ export default function AuditLogsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  // Filters
+  // Account activity state
+  const [authLogs, setAuthLogs] = useState<AuthLogEntry[]>([])
+  const [filteredAuthLogs, setFilteredAuthLogs] = useState<AuthLogEntry[]>([])
+  const [activityActionFilter, setActivityActionFilter] = useState('all')
+  const [activityUserFilter, setActivityUserFilter] = useState('all')
+  const [activityPage, setActivityPage] = useState(1)
+
+  // Filters (inventory tab)
   const [filterLocation, setFilterLocation] = useState('all')
   const [filterType, setFilterType] = useState('all')
   const [filterProduct, setFilterProduct] = useState('all')
@@ -41,6 +51,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { applyFilters() }, [transactions, filterLocation, filterType, filterProduct, filterCategory, filterDateFrom, filterDateTo])
+  useEffect(() => { applyActivityFilters() }, [authLogs, activityActionFilter, activityUserFilter])
 
   async function checkAuth() {
     const user = await getCurrentUser()
@@ -64,7 +75,6 @@ export default function AuditLogsPage() {
         .limit(500)
 
       if (txnError) throw txnError
-      console.log('first transaction products:', data?.[0]?.products)
       setTransactions(data || [])
 
       const productsData = await getAllProducts()
@@ -72,6 +82,9 @@ export default function AuditLogsPage() {
 
       const { data: cats } = await supabase.from('categories').select('*').eq('is_archived', false)
       setCategories(cats || [])
+
+      const authLogsData = await getAllAuthLogs()
+      setAuthLogs(authLogsData)
     } catch (err: any) {
       setError('Failed to load audit logs')
     }
@@ -105,6 +118,18 @@ export default function AuditLogsPage() {
     setFiltered(result)
   }
 
+  function applyActivityFilters() {
+    setActivityPage(1)
+    let result = authLogs
+    if (activityActionFilter !== 'all') {
+      result = result.filter(l => l.action === activityActionFilter)
+    }
+    if (activityUserFilter !== 'all') {
+      result = result.filter(l => l.user_id === activityUserFilter)
+    }
+    setFilteredAuthLogs(result)
+  }
+
   function clearFilters() {
     setFilterLocation('all')
     setFilterType('all')
@@ -119,21 +144,18 @@ export default function AuditLogsPage() {
     router.push('/login')
   }
 
-  // Pagination
+  // Pagination — inventory
   const totalPages = Math.ceil(filtered.length / itemsPerPage)
   const paginated = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
-  // const sidebarLinks = [
-  //   { href: '/restock-requests', icon: '/icons/Plus_square.svg', label: 'Restock' },
-  //   { href: '/inventory', icon: '/icons/Box.svg', label: 'Inventory' },
-  //   { href: '/expenses', icon: '/icons/payment.svg', label: 'Expenses' },
-  //   { href: '/analytics', icon: '/icons/Bar_chart.svg', label: 'Analytics' },
-  //   { href: '/users', icon: '/icons/person.svg', label: 'Staff' },
-  //   { href: '/products', icon: '/icons/Tag.svg', label: 'Products' },
-  //   { href: '/ingredients', icon: '/icons/flour.svg', label: 'Ingredients' },
-  //   { href: '/audit-logs', icon: '/icons/Book.svg', label: 'Audit', active: true },
-  //   { href: '/dashboard', icon: '/icons/menu.svg', label: 'Dashboard' },
-  // ]
+  // Pagination — activity
+  const activityTotalPages = Math.ceil(filteredAuthLogs.length / itemsPerPage)
+  const paginatedActivity = filteredAuthLogs.slice((activityPage - 1) * itemsPerPage, activityPage * itemsPerPage)
+
+  // Unique users who appear in the activity log, for the filter dropdown
+  const activityUsers = Array.from(
+    new Map(authLogs.map(l => [l.user_id, l.profiles?.full_name || 'Unknown'])).entries()
+  )
 
   const transactionTypes = ['adjustment', 'sale', 'production', 'transfer', 'restock', 'initial', 'pullout', 'oth']
 
@@ -159,6 +181,15 @@ export default function AuditLogsPage() {
     return (
       <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize ${location === 'shop' ? 'bg-blue-400' : 'bg-green-500'}`}>
         {location}
+      </span>
+    )
+  }
+
+  function getActionBadge(action: string) {
+    return (
+      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize"
+        style={{ backgroundColor: action === 'login' ? '#10B981' : '#6B7280' }}>
+        {action}
       </span>
     )
   }
@@ -197,12 +228,12 @@ export default function AuditLogsPage() {
 
         {/* Watermark */}
         <img
-  src="/logo-big.png"
-  alt=""
-  className="fixed pointer-events-none select-none"
-  style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', height: 'auto', zIndex: 0 }}
-  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-/>
+          src="/logo-big.png"
+          alt=""
+          className="fixed pointer-events-none select-none"
+          style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', height: 'auto', zIndex: 0 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
 
         {/* SIDEBAR */}
         <ManagerSidebar />
@@ -214,160 +245,300 @@ export default function AuditLogsPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-4xl font-black text-gray-900">Audit Logs</h1>
-              <p className="text-gray-700 font-medium mt-1">{filtered.length} record{filtered.length !== 1 ? 's' : ''} found</p>
+              <p className="text-gray-700 font-medium mt-1">
+                {activeTab === 'inventory'
+                  ? `${filtered.length} record${filtered.length !== 1 ? 's' : ''} found`
+                  : `${filteredAuthLogs.length} record${filteredAuthLogs.length !== 1 ? 's' : ''} found`}
+              </p>
             </div>
-            <button
-              onClick={clearFilters}
-              className="flex items-center gap-2 px-4 py-2 rounded-sm font-bold text-gray-900 text-sm"
-              style={{ backgroundColor: 'white', boxShadow: '2px 2px 7px rgba(0,0,0,0.2)' }}
-            >
-              ✕ Clear Filters
-            </button>
+            {activeTab === 'inventory' && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-2 px-4 py-2 rounded-sm font-bold text-gray-900 text-sm"
+                style={{ backgroundColor: 'white', boxShadow: '2px 2px 7px rgba(0,0,0,0.2)' }}
+              >
+                ✕ Clear Filters
+              </button>
+            )}
           </div>
 
           {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error}</div>}
 
-          {/* FILTERS */}
-          <div className="bg-white rounded-sm p-4 mb-5 grid grid-cols-2 lg:grid-cols-6 gap-3 text-gray-900" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Location</label>
-              <select value={filterLocation} onChange={e => setFilterLocation(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none ">
-                <option value="all">All Locations</option>
-                <option value="shop">Shop</option>
-                <option value="production">Production</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Type</label>
-              <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
-                <option value="all">All Types</option>
-                {transactionTypes.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Category</label>
-              <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
-                <option value="all">All Categories</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Product</label>
-              <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
-                <option value="all">All Products</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
-              <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
-              <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
-            </div>
+          {/* TABS */}
+          <div className="flex gap-2 mb-5">
+            <button onClick={() => setActiveTab('inventory')}
+              className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+              style={activeTab === 'inventory'
+                ? { backgroundColor: '#1a2340', color: 'white' }
+                : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              Inventory Transactions
+            </button>
+            <button onClick={() => setActiveTab('activity')}
+              className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+              style={activeTab === 'activity'
+                ? { backgroundColor: '#1a2340', color: 'white' }
+                : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              Account Activity
+            </button>
           </div>
 
-          {/* TABLE */}
-          {filtered.length === 0 ? (
-            <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-              <div className="text-5xl mb-3">📋</div>
-              <p className="text-lg font-bold text-gray-600">No records found</p>
-              <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-              <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-                <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
-                <h2 className="font-bold text-white">Transaction History</h2>
-                <span className="ml-auto text-xs text-white opacity-60">{filtered.length} records</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                      <th className="px-5 py-3 font-semibold">Date & Time</th>
-                      <th className="px-5 py-3 font-semibold">Product</th>
-                      <th className="px-5 py-3 font-semibold">Category</th>
-                      <th className="px-5 py-3 font-semibold">Type</th>
-                      <th className="px-5 py-3 font-semibold">Location</th>
-                      <th className="px-5 py-3 font-semibold">Change</th>
-                      <th className="px-5 py-3 font-semibold">Before → After</th>
-                      <th className="px-5 py-3 font-semibold">By</th>
-                      <th className="px-5 py-3 font-semibold">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.map((txn) => (
-                      <tr key={txn.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                        <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
-                          {new Date(txn.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
-                        </td>
-                        <td className="px-5 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">{txn.products?.name || '—'}</td>
-                        <td className="px-5 py-3 text-xs text-gray-500">{txn.products?.categories?.name || '—'}</td>
-                        <td className="px-5 py-3">{getTypeBadge(txn.transaction_type)}</td>
-                        <td className="px-5 py-3">{getLocationBadge(txn.location)}</td>
-                        <td className="px-5 py-3">
-                          <span className={`text-sm font-black ${txn.quantity_change > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                            {txn.quantity_change > 0 ? '+' : ''}{txn.quantity_change}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{txn.quantity_before} → {txn.quantity_after}</td>
-                        <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{txn.profiles?.full_name || '—'}</td>
-                        <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{txn.notes || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* ── INVENTORY TAB ── */}
+          {activeTab === 'inventory' && (
+            <>
+              {/* FILTERS */}
+              <div className="bg-white rounded-sm p-4 mb-5 grid grid-cols-2 lg:grid-cols-6 gap-3 text-gray-900" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Location</label>
+                  <select value={filterLocation} onChange={e => setFilterLocation(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none ">
+                    <option value="all">All Locations</option>
+                    <option value="shop">Shop</option>
+                    <option value="production">Production</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Type</label>
+                  <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Types</option>
+                    {transactionTypes.map(t => <option key={t} value={t} className="capitalize">{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Category</label>
+                  <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Categories</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Product</label>
+                  <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Products</option>
+                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
+                  <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
+                  <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                </div>
               </div>
 
-              {/* PAGINATION */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200">
-                  <span className="text-xs text-gray-500">
-                    Page {currentPage} of {totalPages} — {filtered.length} total records
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
-                      style={{ backgroundColor: '#1a2340', color: 'white' }}
-                    >
-                      ← Prev
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                      .map((p, idx, arr) => (
-                        <span key={p} className="flex items-center gap-2">
-                          {idx > 0 && arr[idx - 1] !== p - 1 && (
-                            <span className="text-xs text-gray-400">...</span>
-                          )}
-                          <button
-                            onClick={() => setCurrentPage(p)}
-                            className="px-3 py-1.5 rounded-sm text-xs font-bold"
-                            style={currentPage === p
-                              ? { backgroundColor: '#1a2340', color: 'white' }
-                              : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
-                            }
-                          >
-                            {p}
-                          </button>
-                        </span>
-                      ))
-                    }
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
-                      style={{ backgroundColor: '#1a2340', color: 'white' }}
-                    >
-                      Next →
-                    </button>
+              {/* TABLE */}
+              {filtered.length === 0 ? (
+                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="text-5xl mb-3">📋</div>
+                  <p className="text-lg font-bold text-gray-600">No records found</p>
+                  <p className="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                    <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
+                    <h2 className="font-bold text-white">Transaction History</h2>
+                    <span className="ml-auto text-xs text-white opacity-60">{filtered.length} records</span>
                   </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="px-5 py-3 font-semibold">Date & Time</th>
+                          <th className="px-5 py-3 font-semibold">Product</th>
+                          <th className="px-5 py-3 font-semibold">Category</th>
+                          <th className="px-5 py-3 font-semibold">Type</th>
+                          <th className="px-5 py-3 font-semibold">Location</th>
+                          <th className="px-5 py-3 font-semibold">Change</th>
+                          <th className="px-5 py-3 font-semibold">Before → After</th>
+                          <th className="px-5 py-3 font-semibold">By</th>
+                          <th className="px-5 py-3 font-semibold">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginated.map((txn) => (
+                          <tr key={txn.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(txn.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                            </td>
+                            <td className="px-5 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">{txn.products?.name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-500">{txn.products?.categories?.name || '—'}</td>
+                            <td className="px-5 py-3">{getTypeBadge(txn.transaction_type)}</td>
+                            <td className="px-5 py-3">{getLocationBadge(txn.location)}</td>
+                            <td className="px-5 py-3">
+                              <span className={`text-sm font-black ${txn.quantity_change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                {txn.quantity_change > 0 ? '+' : ''}{txn.quantity_change}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{txn.quantity_before} → {txn.quantity_after}</td>
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{txn.profiles?.full_name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{txn.notes || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* PAGINATION */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Page {currentPage} of {totalPages} — {filtered.length} total records
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          ← Prev
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                          .map((p, idx, arr) => (
+                            <span key={p} className="flex items-center gap-2">
+                              {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                <span className="text-xs text-gray-400">...</span>
+                              )}
+                              <button
+                                onClick={() => setCurrentPage(p)}
+                                className="px-3 py-1.5 rounded-sm text-xs font-bold"
+                                style={currentPage === p
+                                  ? { backgroundColor: '#1a2340', color: 'white' }
+                                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
+                                }
+                              >
+                                {p}
+                              </button>
+                            </span>
+                          ))
+                        }
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
+            </>
+          )}
+
+          {/* ── ACCOUNT ACTIVITY TAB ── */}
+          {activeTab === 'activity' && (
+            <>
+              {/* FILTERS */}
+              <div className="bg-white rounded-sm p-4 mb-5 grid grid-cols-2 lg:grid-cols-4 gap-3 text-gray-900" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Action</label>
+                  <select value={activityActionFilter} onChange={e => setActivityActionFilter(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Actions</option>
+                    <option value="login">Login</option>
+                    <option value="logout">Logout</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">User</label>
+                  <select value={activityUserFilter} onChange={e => setActivityUserFilter(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Users</option>
+                    {activityUsers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {filteredAuthLogs.length === 0 ? (
+                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="text-5xl mb-3">🔐</div>
+                  <p className="text-lg font-bold text-gray-600">No login/logout records found</p>
+                  <p className="text-sm text-gray-400 mt-1">Activity will appear here as users log in and out</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                    <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
+                    <h2 className="font-bold text-white">Login / Logout History</h2>
+                    <span className="ml-auto text-xs text-white opacity-60">{filteredAuthLogs.length} records</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="px-5 py-3 font-semibold">Date & Time</th>
+                          <th className="px-5 py-3 font-semibold">User</th>
+                          <th className="px-5 py-3 font-semibold">Role</th>
+                          <th className="px-5 py-3 font-semibold">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedActivity.map((log) => (
+                          <tr key={log.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                            </td>
+                            <td className="px-5 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">{log.profiles?.full_name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-500 capitalize">{log.profiles?.role || '—'}</td>
+                            <td className="px-5 py-3">{getActionBadge(log.action)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* PAGINATION */}
+                  {activityTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Page {activityPage} of {activityTotalPages} — {filteredAuthLogs.length} total records
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                          disabled={activityPage === 1}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          ← Prev
+                        </button>
+                        {Array.from({ length: activityTotalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === activityTotalPages || Math.abs(p - activityPage) <= 1)
+                          .map((p, idx, arr) => (
+                            <span key={p} className="flex items-center gap-2">
+                              {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                <span className="text-xs text-gray-400">...</span>
+                              )}
+                              <button
+                                onClick={() => setActivityPage(p)}
+                                className="px-3 py-1.5 rounded-sm text-xs font-bold"
+                                style={activityPage === p
+                                  ? { backgroundColor: '#1a2340', color: 'white' }
+                                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
+                                }
+                              >
+                                {p}
+                              </button>
+                            </span>
+                          ))
+                        }
+                        <button
+                          onClick={() => setActivityPage(p => Math.min(activityTotalPages, p + 1))}
+                          disabled={activityPage === activityTotalPages}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

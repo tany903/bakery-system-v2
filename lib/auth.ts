@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { UserRole, Profile } from './supabase'
+import { logAuthEvent } from './auth-logs'
 
 const PROFILE_CACHE_KEY = 'freds_user_profile'
 
@@ -27,10 +28,23 @@ function clearCachedProfile(): void {
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
+
+  // Log the login event — fire and forget, never blocks login flow
+  if (data.user) {
+    logAuthEvent(data.user.id, 'login')
+  }
+
   return data
 }
 
 export async function signOut() {
+  // Grab the current user BEFORE signing out — once signed out, auth.uid()
+  // becomes null and the RLS policy (user_id = auth.uid()) would reject the insert.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    await logAuthEvent(user.id, 'logout')
+  }
+
   clearCachedProfile()
   const { error } = await supabase.auth.signOut()
   if (error) throw error
