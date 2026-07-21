@@ -196,19 +196,28 @@ export default function POSPage() {
       const cartSnapshot = cart
       const sale = await createSale(cartSnapshot, paymentMethod, userId)
 
-      // Build receipt from local data to avoid PostgREST profiles-join issues
-      // that can silently fail and prevent the receipt from showing.
+      // Re-fetch just this sale row to get DB-generated columns (sale_number, sale_date)
+      // without relying on the profiles join which can silently fail.
+      const { data: fullSale } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('id', sale.id)
+        .single()
+
+      const baseSale = fullSale || sale
+
+      // Build receipt items and cashier name locally — no join needed
       const receiptSale = {
-        ...sale,
+        ...baseSale,
         sale_items: cartSnapshot.map(item => ({
           id: item.product.id,
-          sale_id: sale.id,
+          sale_id: baseSale.id,
           product_id: item.product.id,
           product_name: item.product.name,
           quantity: item.quantity,
           unit_price: getEffectivePrice(item),
           subtotal: getItemSubtotal(item),
-          created_at: sale.created_at,
+          created_at: baseSale.created_at,
         })),
         profiles: { full_name: cashierName || 'Unknown' },
       }
