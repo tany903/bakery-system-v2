@@ -10,6 +10,7 @@ import {
   type ReservationWithDetails,
 } from '@/lib/reservations'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
+import ManagerSidebar from '@/components/ManagerSidebar'
 
 const PAGE_SIZE = 9
 
@@ -468,14 +469,14 @@ export default function ReservationsPage() {
     )
   }
 
-  // Manager view
+ // Manager view
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
         <Branding /><LogoutButton />
       </div>
       <div className="flex flex-1 relative overflow-hidden">
-        <Watermark />{mainContent}
+        <Watermark /><ManagerSidebar />{mainContent}
       </div>
       {completeModal}
       {cancelModal}
