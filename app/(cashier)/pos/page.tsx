@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import { getAllProducts, getAllCategories } from '@/lib/products'
 import {
-  createRestockRequest,
-  type NewRestockItem,
-} from '@/lib/restock-requests'
+  createReservation,
+  type NewReservationItem,
+} from '@/lib/reservations'
 import {
   createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal,
   type CartItem, type SalesStats,
@@ -72,9 +72,12 @@ export default function POSPage() {
   const [restockError, setRestockError] = useState('')
   const [restockSuccess, setRestockSuccess] = useState('')
 
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+
   useEffect(() => { checkAuth() }, [])
   useRealtimeRefresh(['products', 'sales', 'sale_items'], loadData)
-  
+
   async function checkAuth() {
     const user = await getCurrentUser()
     if (!user) { router.push('/login'); return }
@@ -213,6 +216,8 @@ export default function POSPage() {
     setRestockDeliveryDate('')
     setRestockError('')
     setRestockSuccess('')
+    setCustomerName('')
+    setCustomerPhone('')
     setShowRestockModal(true)
   }
 
@@ -267,28 +272,32 @@ export default function POSPage() {
 
   async function handleRestockSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!customerName.trim()) { setRestockError('Customer name is required'); return }
     const validItems = restockItems.filter(i => i.product_id && parseInt(i.requested_quantity) > 0)
     if (validItems.length === 0) { setRestockError('Add at least one product with a valid quantity'); return }
-    const items: NewRestockItem[] = validItems.map(i => ({
-      product_id: i.product_id,
-      requested_quantity: parseInt(i.requested_quantity),
-      notes: i.notes || undefined,
-    }))
+
+    const items: NewReservationItem[] = validItems.map(i => {
+      const product = restockProducts.find((p: any) => p.id === i.product_id)
+      return {
+        product_id: i.product_id,
+        product_name: product?.name || 'Unknown',
+        quantity: parseInt(i.requested_quantity),
+        unit_price: product?.price || 0,
+      }
+    })
+
     setRestockSubmitting(true); setRestockError('')
     try {
-      // Convert Manila local datetime to UTC before saving
       const deliveryDateUTC = restockDeliveryDate ? manilaLocalToUTC(restockDeliveryDate) : undefined
-      await createRestockRequest(
-        items,
-        'manual_order',
-        userId,
-        restockOrderNotes || undefined,
-        deliveryDateUTC
-      )
-      setRestockSuccess(`Restock request created with ${items.length} product${items.length !== 1 ? 's' : ''}`)
-      setTimeout(() => { setShowRestockModal(false); setRestockSuccess('') }, 1500)
+      const reservation = await createReservation(items, customerName.trim(), userId, {
+        customerPhone: customerPhone.trim() || undefined,
+        neededBy: deliveryDateUTC,
+        notes: restockOrderNotes || undefined,
+      })
+      setRestockSuccess(`Reservation created — fee of ₱${reservation.fee_amount.toFixed(2)} collected, balance ₱${reservation.balance_amount.toFixed(2)} due at pickup`)
+      setTimeout(() => { setShowRestockModal(false); setRestockSuccess(''); setCustomerName(''); setCustomerPhone('') }, 2500)
     } catch (err: any) {
-      setRestockError(err.message || 'Failed to create request')
+      setRestockError(err.message || 'Failed to create reservation')
     } finally { setRestockSubmitting(false) }
   }
 
@@ -304,7 +313,21 @@ export default function POSPage() {
     { href: '/pos', label: 'POS', active: true },
     { href: '/inventory', label: 'Inventory' },
     { href: '/restock-requests', label: 'Restock' },
+    { href: '/reservations', label: 'Reservations' },
   ]
+
+  // Live total/fee/balance preview for the reservation being built in the modal
+  const reservationPreview = (() => {
+    const validItems = restockItems.filter(i => i.product_id && parseInt(i.requested_quantity) > 0)
+    if (validItems.length === 0) return null
+    const total = validItems.reduce((sum, i) => {
+      const p = restockProducts.find((pr: any) => pr.id === i.product_id)
+      return sum + (p?.price || 0) * parseInt(i.requested_quantity)
+    }, 0)
+    const fee = total * 0.5
+    const balance = total - fee
+    return { total, fee, balance }
+  })()
 
   if (loading) {
     return (
@@ -378,7 +401,6 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto">
             {filteredProducts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                {/* <div className="text-5xl mb-3">🔍</div> */}
                 <p className="font-semibold">No products found</p>
               </div>
             ) : (
@@ -398,7 +420,7 @@ export default function POSPage() {
                 <button onClick={openRestockModal}
                   className="text-xs font-bold px-2 py-1 rounded-sm flex items-center gap-1"
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white' }}
-                  title="New Restock Request">
+                  title="New Reservation">
                   Advance Order
                 </button>
                 <span className="text-white text-sm font-bold opacity-70">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</span>
@@ -410,9 +432,7 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto px-4 py-3">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
-                {/* <div className="text-5xl mb-3">🛒</div> */}
                 <p className="text-sm font-semibold">Cart is empty</p>
-                {/* <p className="text-xs mt-1">Tap a product to add it</p> */}
               </div>
             ) : (
               <div className="space-y-3">
@@ -600,19 +620,34 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Advance Order / Restock Modal */}
+      {/* Advance Order / Reservation Modal */}
       {showRestockModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-sm w-full max-w-lg max-h-[90vh] flex flex-col" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
             <div className="px-6 py-4 shrink-0" style={{ backgroundColor: '#220901' }}>
               <h2 className="text-white font-black text-lg">📦 Advance Order</h2>
-              <p className="text-white text-xs opacity-50 mt-0.5">Reserve products for tomorrow or future orders</p>
+              <p className="text-white text-xs opacity-50 mt-0.5">Reserve products with a 50% deposit</p>
             </div>
 
             <form onSubmit={handleRestockSubmit} className="flex flex-col flex-1 overflow-hidden">
               <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
                 {restockError && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-red-500">{restockError}</div>}
                 {restockSuccess && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-green-500">{restockSuccess}</div>}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Customer Name *</label>
+                    <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)}
+                      required placeholder="e.g., Maria Santos"
+                      className="w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 focus:outline-none focus:border-gray-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Phone (optional)</label>
+                    <input type="text" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
+                      placeholder="09xx-xxx-xxxx"
+                      className="w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 focus:outline-none focus:border-gray-400" />
+                  </div>
+                </div>
 
                 {restockItems.map((item, index) => {
                   const selectedProduct = restockProducts.find((p: any) => p.id === item.product_id)
@@ -631,7 +666,7 @@ export default function POSPage() {
                           <option value="">Select a product...</option>
                           {getAvailableRestockProducts(index).map((p: any) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} — Shop: {p.shop_current_stock} | Prod: {p.production_current_stock}
+                              {p.name} — ₱{p.price.toFixed(2)} — Shop: {p.shop_current_stock} | Prod: {p.production_current_stock}
                             </option>
                           ))}
                         </select>
@@ -647,6 +682,10 @@ export default function POSPage() {
                             <div>
                               <p className="text-white text-xs opacity-50">Prod Stock</p>
                               <p className="text-white font-black text-base">{selectedProduct.production_current_stock}</p>
+                            </div>
+                            <div>
+                              <p className="text-white text-xs opacity-50">Price</p>
+                              <p className="text-white font-black text-base">₱{selectedProduct.price.toFixed(2)}</p>
                             </div>
                           </div>
                         )}
@@ -710,13 +749,31 @@ export default function POSPage() {
                       className="w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400" />
                   </div>
                 </div>
+
+                {/* Reservation fee/balance preview */}
+                {reservationPreview && (
+                  <div className="rounded-sm px-4 py-3 bg-gray-50 border border-gray-100 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500">Total Order Value</span>
+                      <span className="font-bold text-gray-900">₱{reservationPreview.total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-black">
+                      <span>Fee to Collect Now (50%)</span>
+                      <span style={{ color: '#7B1111' }}>₱{reservationPreview.fee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Balance Due at Pickup</span>
+                      <span>₱{reservationPreview.balance.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="px-6 py-4 border-t border-gray-100 flex gap-3 shrink-0">
                 <button type="submit" disabled={restockSubmitting}
                   className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50"
                   style={{ backgroundColor: '#1a2340' }}>
-                  {restockSubmitting ? 'Submitting...' : 'Submit Request'}
+                  {restockSubmitting ? 'Submitting...' : 'Confirm Reservation & Collect Fee'}
                 </button>
                 <button type="button" onClick={() => setShowRestockModal(false)}
                   className="px-5 py-2 rounded-sm border border-gray-200 text-sm font-semibold hover:bg-gray-50 text-gray-900">

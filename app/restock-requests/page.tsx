@@ -292,6 +292,7 @@ export default function RestockRequestsPage() {
     { href: '/pos', label: 'POS' },
     { href: '/inventory', label: 'Inventory' },
     { href: '/restock-requests', label: 'Restock', active: true },
+    { href: '/reservations', label: 'Reservations' }
   ]
   const productionNavLinks = [
     { href: '/production', label: 'Dashboard' },
@@ -299,6 +300,7 @@ export default function RestockRequestsPage() {
     { href: '/restock-requests', label: 'Restock', active: true },
     { href: '/ingredients', label: 'Ingredients' },
     { href: '/purchase-orders', label: 'Purchase Orders' },
+    { href: '/reservations', label: 'Reservations' }
   ]
   const statusTabs = [
     { key: 'all', label: 'All', count: requests.length },

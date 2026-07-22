@@ -34,6 +34,7 @@ const productionNavLinks = [
   { href: '/restock-requests', label: 'Restock' },
   { href: '/ingredients', label: 'Ingredients', active: true },
   { href: '/purchase-orders', label: 'Purchase Orders' },
+  { href: '/reservations', label: 'Reservations' }
 ]
 
 const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"

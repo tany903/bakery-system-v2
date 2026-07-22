@@ -319,6 +319,7 @@ const productionNavLinks = [
   { href: '/restock-requests', label: 'Restock'},
   { href: '/ingredients', label: 'Ingredients' },
   { href: '/purchase-orders', label: 'Purchase Orders' },
+  { href: '/reservations', label: 'Reservations' }
 ]
 
   const Watermark = () => (

@@ -3,6 +3,7 @@ import { usePathname } from 'next/navigation'
 const links = [
   { href: '/dashboard',        icon: '/icons/menu.svg',        label: 'Dashboard' },
   { href: '/restock-requests', icon: '/icons/Plus_square.svg', label: 'Restock' },
+  { href: '/reservations',     icon: '/icons/Plus_square.svg', label: 'Reservations' },
   { href: '/inventory',        icon: '/icons/Box.svg',         label: 'Inventory' },
   { href: '/expenses',         icon: '/icons/payment.svg',     label: 'Expenses' },
   { href: '/analytics',        icon: '/icons/Bar_chart.svg',   label: 'Analytics' },
