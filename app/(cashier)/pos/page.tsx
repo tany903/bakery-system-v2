@@ -192,42 +192,41 @@ export default function POSPage() {
   function clearCart() { setCart([]) }
 
   async function processPayment() {
-    if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
-    setProcessing(true); setError('')
-    try {
-      const cartSnapshot = cart
-      const sale = await createSale(cartSnapshot, paymentMethod, userId)
-
-      const receiptSale = {
-        ...sale,
-        sale_items: cartSnapshot.map(item => ({
-          id: item.product.id,
-          sale_id: sale.id,
-          product_id: item.product.id,
-          product_name: item.product.name,
-          quantity: item.quantity,
-          unit_price: item.isOldStock
-            ? item.product.price * 0.5
-            : item.discountPct
-              ? item.product.price * (1 - item.discountPct / 100)
-              : item.product.price,
-          subtotal: getItemSubtotal(item),
-          created_at: sale.created_at,
-        })),
-        profiles: {
-          full_name: cashierName || 'Unknown',
-        },
-      }
-
-      setLastSale(receiptSale)
-      setShowReceipt(true)
-      clearCart()
-      await loadData()
-    } catch (err: any) {
-      setError(err.message || 'Payment failed')
-    } finally { setProcessing(false) }
+  if (cart.length === 0) {
+    setError('Cart is empty')
+    setTimeout(() => setError(''), 3000)
+    return
   }
 
+  setProcessing(true)
+  setError('')
+
+  try {
+    const sale = await createSale(cart, paymentMethod, userId)
+
+    const { data: receiptSale, error: receiptError } = await supabase
+      .from('sales')
+      .select(`
+        *,
+        sale_items (*),
+        profiles (full_name)
+      `)
+      .eq('id', sale.id)
+      .single()
+
+    if (receiptError) throw receiptError
+
+    setLastSale(receiptSale)
+    setShowReceipt(true)
+
+    clearCart()
+    await loadData()
+  } catch (err: any) {
+    setError(err.message || 'Payment failed')
+  } finally {
+    setProcessing(false)
+  }
+}
   async function openRestockModal() {
     const data = await getAllProducts()
     setRestockProducts(data.filter((p: any) => !p.is_archived))
