@@ -42,7 +42,6 @@ export default function POSPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState('')
-  const [cashierName, setCashierName] = useState('')
   const [products, setProducts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -87,7 +86,6 @@ export default function POSPage() {
       router.push('/login'); return
     }
     setUserId(user.id)
-    setCashierName(profile.full_name || 'Unknown')
     await loadData()
     setLoading(false)
   }
@@ -195,31 +193,13 @@ export default function POSPage() {
     if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
     setProcessing(true); setError('')
     try {
-      const cartSnapshot = cart
-      const sale = await createSale(cartSnapshot, paymentMethod, userId)
-
-      const receiptSale = {
-        ...sale,
-        sale_items: cartSnapshot.map(item => ({
-          id: item.product.id,
-          sale_id: sale.id,
-          product_id: item.product.id,
-          product_name: item.product.name,
-          quantity: item.quantity,
-          unit_price: item.isOldStock
-            ? item.product.price * 0.5
-            : item.discountPct
-              ? item.product.price * (1 - item.discountPct / 100)
-              : item.product.price,
-          subtotal: getItemSubtotal(item),
-          created_at: sale.created_at,
-        })),
-        profiles: {
-          full_name: cashierName || 'Unknown',
-        },
-      }
-
-      setLastSale(receiptSale)
+      const sale = await createSale(cart, paymentMethod, userId)
+      const { data: fullSale } = await supabase
+        .from('sales')
+        .select('*, sale_items (*), profiles (full_name)')
+        .eq('id', sale.id)
+        .single()
+      setLastSale(fullSale)
       setShowReceipt(true)
       clearCart()
       await loadData()
