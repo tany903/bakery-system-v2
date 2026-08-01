@@ -4,11 +4,12 @@ import type { Product } from '@/lib/supabase'
 
 interface ProductCardProps {
   product: Product & { categories?: { name: string } }
-  onEdit: (product: Product) => void
-  onArchive: (id: string) => void
+  onEdit?: (product: Product) => void
+  onArchive?: (id: string) => void
+  onRestore?: (id: string) => void
 }
 
-export default function ProductCard({ product, onEdit, onArchive }: ProductCardProps) {
+export default function ProductCard({ product, onEdit, onArchive, onRestore }: ProductCardProps) {
   if (!product) return null
 
   const shopLow = product.shop_current_stock < product.shop_minimum_threshold
@@ -68,15 +69,24 @@ export default function ProductCard({ product, onEdit, onArchive }: ProductCardP
 
         {/* Buttons */}
         <div className="flex gap-2 pt-2 border-t border-gray-100">
-          <button onClick={() => onEdit(product)}
-            className="flex-1 text-xs font-bold py-2 rounded-sm text-white"
-            style={{ backgroundColor: '#1a2340' }}>
-            Edit
-          </button>
-          <button onClick={() => { if (confirm(`Archive ${product.name}?`)) onArchive(product.id) }}
-            className="flex-1 text-xs font-bold py-2 rounded-sm text-white bg-gray-500 hover:bg-gray-600">
-            Archive
-          </button>
+          {onRestore ? (
+            <button onClick={() => onRestore(product.id)}
+              className="flex-1 text-xs font-bold py-2 rounded-sm text-white bg-green-600 hover:bg-green-700">
+              Restore
+            </button>
+          ) : (
+            <>
+              <button onClick={() => onEdit?.(product)}
+                className="flex-1 text-xs font-bold py-2 rounded-sm text-white"
+                style={{ backgroundColor: '#1a2340' }}>
+                Edit
+              </button>
+              <button onClick={() => { if (confirm(`Archive ${product.name}?`)) onArchive?.(product.id) }}
+                className="flex-1 text-xs font-bold py-2 rounded-sm text-white bg-gray-500 hover:bg-gray-600">
+                Archive
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

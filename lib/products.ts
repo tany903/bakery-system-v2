@@ -92,7 +92,7 @@ export async function getLowStockProducts(): Promise<Product[]> {
     console.error('Error getting low stock:', error)
     throw error
   }
-  
+
   return data || []
 }
 
@@ -161,11 +161,11 @@ export async function updateStock(
   productionStock?: number
 ): Promise<void> {
   const updates: any = {}
-  
+
   if (shopStock !== undefined) {
     updates.shop_current_stock = shopStock
   }
-  
+
   if (productionStock !== undefined) {
     updates.production_current_stock = productionStock
   }
@@ -184,12 +184,17 @@ export async function updateStock(
 // CATEGORIES
 // =============================================
 
-export async function getAllCategories(): Promise<Category[]> {
-  const { data, error } = await supabase
+export async function getAllCategories(includeArchived = false): Promise<Category[]> {
+  let query = supabase
     .from('categories')
     .select('*')
-    .eq('is_archived', false)  // Only show active categories
     .order('name')
+
+  if (!includeArchived) {
+    query = query.eq('is_archived', false)
+  }
+
+  const { data, error } = await query
 
   if (error) throw error
   return data || []
@@ -201,6 +206,18 @@ export async function archiveCategory(id: string): Promise<void> {
     .update({
       is_archived: true,
       archived_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
+export async function unarchiveCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('categories')
+    .update({
+      is_archived: false,
+      archived_at: null,
     })
     .eq('id', id)
 

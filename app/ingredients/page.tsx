@@ -8,6 +8,7 @@ import {
   createIngredient,
   updateIngredient,
   archiveIngredient,
+  unarchiveIngredient,
   adjustIngredientStock,
   getAllIngredientCategories,
   type IngredientWithCategory,
@@ -73,8 +74,10 @@ export default function IngredientsPage() {
   const [adjustNotes, setAdjustNotes] = useState('')
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => { checkAuth() }, [])
+  useEffect(() => { if (!loading) loadData() }, [showArchived])
 
   async function checkAuth() {
     const user = await getCurrentUser()
@@ -91,8 +94,11 @@ export default function IngredientsPage() {
 
   async function loadData() {
     try {
-      const [ingredientsData, categoriesData] = await Promise.all([getAllIngredients(), getAllIngredientCategories()])
-      setIngredients(ingredientsData)
+      const [ingredientsData, categoriesData] = await Promise.all([
+        getAllIngredients(showArchived),
+        getAllIngredientCategories(),
+      ])
+      setIngredients(showArchived ? ingredientsData.filter((i: any) => i.is_archived) : ingredientsData)
       setCategories(categoriesData)
     } catch { setError('Failed to load ingredients') }
   }
@@ -140,6 +146,13 @@ export default function IngredientsPage() {
     try {
       await archiveIngredient(ingredientId); setSuccess('Ingredient archived successfully'); await loadData()
     } catch (err: any) { setError(err.message || 'Failed to archive ingredient') }
+    finally { setTimeout(() => setSuccess(''), 3000) }
+  }
+
+  async function handleRestoreIngredient(ingredientId: string) {
+    try {
+      await unarchiveIngredient(ingredientId); setSuccess('Ingredient restored'); await loadData()
+    } catch (err: any) { setError(err.message || 'Failed to restore ingredient') }
     finally { setTimeout(() => setSuccess(''), 3000) }
   }
 
@@ -235,14 +248,29 @@ export default function IngredientsPage() {
         <div className="relative z-10 flex-1 p-6 overflow-y-auto">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-4xl font-black text-gray-900">Ingredients</h1>
-            {userRole === 'manager' && (
-              <button onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-sm font-bold text-white text-sm"
-                style={{ backgroundColor: '#1a2340' }}>
-                <img src="/icons/Plus_circle.svg" alt="" className="w-4 h-4" style={{ filter: 'brightness(0) invert(1)' }} />
-                Add Ingredient
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              {userRole === 'manager' && (
+                <div className="flex gap-2">
+                  {[{ v: false, label: 'Active' }, { v: true, label: 'Archived' }].map(opt => (
+                    <button key={opt.label} onClick={() => setShowArchived(opt.v)}
+                      className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                      style={showArchived === opt.v
+                        ? { backgroundColor: '#7B1111', color: 'white' }
+                        : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {userRole === 'manager' && !showArchived && (
+                <button onClick={() => setShowAddModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-sm font-bold text-white text-sm"
+                  style={{ backgroundColor: '#1a2340' }}>
+                  <img src="/icons/Plus_circle.svg" alt="" className="w-4 h-4" style={{ filter: 'brightness(0) invert(1)' }} />
+                  Add Ingredient
+                </button>
+              )}
+            </div>
           </div>
 
           {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error} <button onClick={() => setError('')} className="ml-3 underline text-xs">Dismiss</button></div>}
@@ -250,7 +278,7 @@ export default function IngredientsPage() {
 
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { label: 'Total Ingredients', value: ingredients.length, sub: 'Active ingredients' },
+              { label: 'Total Ingredients', value: ingredients.length, sub: showArchived ? 'Archived ingredients' : 'Active ingredients' },
               { label: 'Low Stock', value: lowStockCount, sub: 'Need restocking' },
               { label: 'Out of Stock', value: outOfStockCount, sub: 'Ingredients' },
             ].map(card => (
@@ -265,7 +293,7 @@ export default function IngredientsPage() {
           <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
             <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#6B8F8F' }}>
               <img src="/icons/flour.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
-              <h2 className="font-bold text-white">All Ingredients</h2>
+              <h2 className="font-bold text-white">{showArchived ? 'Archived Ingredients' : 'All Ingredients'}</h2>
               <span className="ml-auto text-xs text-white opacity-60">{filteredIngredients.length} ingredients</span>
             </div>
             <div className="flex gap-3 px-5 pt-4 pb-2 items-center flex-wrap">
@@ -296,7 +324,9 @@ export default function IngredientsPage() {
               <tbody>
                 {filteredIngredients.length === 0 ? (
                   <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-400 text-sm">
-                    {ingredients.length === 0 ? 'No ingredients yet — add your first one!' : 'No ingredients match your filters'}
+                    {ingredients.length === 0
+                      ? (showArchived ? 'No archived ingredients' : 'No ingredients yet — add your first one!')
+                      : 'No ingredients match your filters'}
                   </td></tr>
                 ) : filteredIngredients.map(ingredient => (
                   <tr key={ingredient.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
@@ -312,11 +342,22 @@ export default function IngredientsPage() {
                     <td className="px-5 py-3"><StockBadge stock={ingredient.current_stock} min={ingredient.minimum_threshold} /></td>
                     <td className="px-5 py-3">
                       <div className="flex gap-2">
-                        <button onClick={() => openAdjustModal(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-blue-500 hover:bg-blue-600">Adjust</button>
-                        {userRole === 'manager' && (
+                        {showArchived ? (
+                          userRole === 'manager' && (
+                            <button onClick={() => handleRestoreIngredient(ingredient.id)}
+                              className="text-xs font-bold px-3 py-1 rounded-full text-white bg-green-600 hover:bg-green-700">
+                              Restore
+                            </button>
+                          )
+                        ) : (
                           <>
-                            <button onClick={() => openEditModal(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-purple-500 hover:bg-purple-600">Edit</button>
-                            <button onClick={() => handleArchiveIngredient(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-gray-400 hover:bg-gray-500">Archive</button>
+                            <button onClick={() => openAdjustModal(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-blue-500 hover:bg-blue-600">Adjust</button>
+                            {userRole === 'manager' && (
+                              <>
+                                <button onClick={() => openEditModal(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-purple-500 hover:bg-purple-600">Edit</button>
+                                <button onClick={() => handleArchiveIngredient(ingredient.id)} className="text-xs font-bold px-3 py-1 rounded-full text-white bg-gray-400 hover:bg-gray-500">Archive</button>
+                              </>
+                            )}
                           </>
                         )}
                       </div>

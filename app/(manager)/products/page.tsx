@@ -10,10 +10,12 @@ import {
   createProduct,
   updateProduct,
   archiveProduct,
+  unarchiveProduct,
   getAllCategories,
   createCategory,
   updateCategory,
   archiveCategory,
+  unarchiveCategory,
 } from '@/lib/products'
 import type { Product, Category } from '@/lib/supabase'
 import ProductCard from '@/components/ProductCard'
@@ -34,6 +36,7 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStock, setFilterStock] = useState<string>('all')
+  const [showArchived, setShowArchived] = useState(false)
 
   // Categories state
   const [showCategoryModal, setShowCategoryModal] = useState(false)
@@ -44,7 +47,8 @@ export default function ProductsPage() {
   const [success, setSuccess] = useState('')
 
   useEffect(() => { checkAuth() }, [])
-  useEffect(() => { if (!loading) loadProducts() }, [filterCategory, filterStock, loading])
+  useEffect(() => { if (!loading) loadProducts() }, [filterCategory, filterStock, showArchived, loading])
+  useEffect(() => { if (!loading) loadCategories() }, [showArchived, loading])
   useRealtimeRefresh(['products', 'categories'], () => { loadProducts(); loadCategories() })
 
   async function checkAuth() {
@@ -57,14 +61,15 @@ export default function ProductsPage() {
   }
 
   async function loadCategories() {
-    try { setCategories(await getAllCategories()) } catch {}
+    try { setCategories(await getAllCategories(showArchived)) } catch {}
   }
 
   async function loadProducts() {
     try {
       let data: Product[] = filterCategory !== 'all'
         ? await getProductsByCategory(filterCategory)
-        : await getAllProducts()
+        : await getAllProducts(showArchived)
+      if (showArchived) data = data.filter((p: any) => p.is_archived)
       if (filterStock === 'low') {
         data = data.filter(p =>
           p.shop_current_stock < p.shop_minimum_threshold ||
@@ -108,6 +113,14 @@ export default function ProductsPage() {
     } catch { setError('Failed to archive product') }
   }
 
+  async function handleRestoreProduct(id: string) {
+    try {
+      await unarchiveProduct(id)
+      flash('Product restored')
+      await loadProducts()
+    } catch { setError('Failed to restore product') }
+  }
+
   async function handleCategorySubmit(e: React.FormEvent) {
     e.preventDefault(); setError('')
     try {
@@ -132,6 +145,15 @@ export default function ProductsPage() {
     } catch { setError('Failed to archive category') }
   }
 
+  async function handleRestoreCategory(id: string, name: string) {
+    if (!confirm(`Restore category "${name}"?`)) return
+    try {
+      await unarchiveCategory(id)
+      flash('Category restored')
+      await loadCategories()
+    } catch { setError('Failed to restore category') }
+  }
+
   function openEditProduct(product: Product) { setEditingProduct(product); setShowProductModal(true) }
   function closeProductModal() { setShowProductModal(false); setEditingProduct(undefined) }
   function openEditCategory(cat: Category) { setEditingCategory(cat); setCategoryForm({ name: cat.name, description: cat.description || '' }); setShowCategoryModal(true) }
@@ -139,18 +161,6 @@ export default function ProductsPage() {
 
   function flash(msg: string) { setSuccess(msg); setTimeout(() => setSuccess(''), 3000) }
   const handleLogout = async () => { await signOut(); router.push('/login') }
-
-  // const sidebarLinks = [
-  //   { href: '/restock-requests', icon: '/icons/Plus_square.svg', label: 'Restock' },
-  //   { href: '/inventory', icon: '/icons/Box.svg', label: 'Inventory' },
-  //   { href: '/expenses', icon: '/icons/payment.svg', label: 'Expenses' },
-  //   { href: '/analytics', icon: '/icons/Bar_chart.svg', label: 'Analytics' },
-  //   { href: '/users', icon: '/icons/person.svg', label: 'Staff' },
-  //   { href: '/products', icon: '/icons/Tag.svg', label: 'Products', active: true },
-  //   { href: '/ingredients', icon: '/icons/flour.svg', label: 'Ingredients' },
-  //   { href: '/audit-logs', icon: '/icons/Book.svg', label: 'Audit' },
-  //   { href: '/dashboard', icon: '/icons/menu.svg', label: 'Dashboard' },
-  // ]
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-800"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -198,7 +208,7 @@ export default function ProductsPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-4xl font-black text-gray-900">Products</h1>
-            {activeTab === 'products' ? (
+            {!showArchived && (activeTab === 'products' ? (
               <button onClick={() => setShowProductModal(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-sm font-bold text-white text-sm"
                 style={{ backgroundColor: '#1a2340' }}>
@@ -212,7 +222,7 @@ export default function ProductsPage() {
                 <img src="/icons/Plus_circle.svg" alt="" className="w-4 h-4" style={{ filter: 'brightness(0) invert(1)' }} />
                 Add Category
               </button>
-            )}
+            ))}
           </div>
 
           {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error} <button onClick={() => setError('')} className="ml-3 underline text-xs">Dismiss</button></div>}
@@ -242,18 +252,32 @@ export default function ProductsPage() {
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mb-5">
-            {(['products', 'categories'] as const).map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)}
-                className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors capitalize"
-                style={activeTab === tab
-                  ? { backgroundColor: '#1a2340', color: 'white' }
-                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
-                }>
-                {tab === 'products' ? 'Products' : 'Categories'}
-              </button>
-            ))}
+          {/* Tabs + Archive toggle */}
+          <div className="flex gap-2 mb-5 justify-between">
+            <div className="flex gap-2">
+              {(['products', 'categories'] as const).map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors capitalize"
+                  style={activeTab === tab
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
+                  }>
+                  {tab === 'products' ? 'Products' : 'Categories'}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {[{ v: false, label: 'Active' }, { v: true, label: 'Archived' }].map(opt => (
+                <button key={opt.label} onClick={() => setShowArchived(opt.v)}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                  style={showArchived === opt.v
+                    ? { backgroundColor: '#7B1111', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
+                  }>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* ── PRODUCTS TAB ── */}
@@ -279,17 +303,25 @@ export default function ProductsPage() {
               {products.length === 0 ? (
                 <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                   <div className="text-5xl mb-3">📦</div>
-                  <p className="text-lg font-bold text-gray-600">No products found</p>
-                  <button onClick={() => setShowProductModal(true)}
-                    className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white"
-                    style={{ backgroundColor: '#1a2340' }}>
-                    + Add First Product
-                  </button>
+                  <p className="text-lg font-bold text-gray-600">{showArchived ? 'No archived products' : 'No products found'}</p>
+                  {!showArchived && (
+                    <button onClick={() => setShowProductModal(true)}
+                      className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white"
+                      style={{ backgroundColor: '#1a2340' }}>
+                      + Add First Product
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {products.map(product => (
-                    <ProductCard key={product.id} product={product} onEdit={openEditProduct} onArchive={handleArchiveProduct} />
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onEdit={showArchived ? undefined : openEditProduct}
+                      onArchive={showArchived ? undefined : handleArchiveProduct}
+                      onRestore={showArchived ? handleRestoreProduct : undefined}
+                    />
                   ))}
                 </div>
               )}
@@ -301,7 +333,7 @@ export default function ProductsPage() {
             <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
               <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
                 <img src="/icons/Tag.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
-                <h2 className="font-bold text-white">All Categories</h2>
+                <h2 className="font-bold text-white">{showArchived ? 'Archived Categories' : 'All Categories'}</h2>
                 <span className="ml-auto text-xs text-white opacity-60">{categories.length} categories</span>
               </div>
               <table className="w-full">
@@ -316,7 +348,7 @@ export default function ProductsPage() {
                 </thead>
                 <tbody>
                   {categories.length === 0 ? (
-                    <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">No categories yet</td></tr>
+                    <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">{showArchived ? 'No archived categories' : 'No categories yet'}</td></tr>
                   ) : (
                     categories.map(cat => {
                       const count = products.filter(p => (p as any).category_id === cat.id).length
@@ -332,14 +364,23 @@ export default function ProductsPage() {
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex gap-2">
-                              <button onClick={() => openEditCategory(cat)}
-                                className="text-xs font-bold px-3 py-1 rounded-full text-white bg-blue-500 hover:bg-blue-600">
-                                Edit
-                              </button>
-                              <button onClick={() => handleArchiveCategory(cat.id, cat.name)}
-                                className="text-xs font-bold px-3 py-1 rounded-full text-white bg-red-400 hover:bg-red-500">
-                                Archive
-                              </button>
+                              {showArchived ? (
+                                <button onClick={() => handleRestoreCategory(cat.id, cat.name)}
+                                  className="text-xs font-bold px-3 py-1 rounded-full text-white bg-green-600 hover:bg-green-700">
+                                  Restore
+                                </button>
+                              ) : (
+                                <>
+                                  <button onClick={() => openEditCategory(cat)}
+                                    className="text-xs font-bold px-3 py-1 rounded-full text-white bg-blue-500 hover:bg-blue-600">
+                                    Edit
+                                  </button>
+                                  <button onClick={() => handleArchiveCategory(cat.id, cat.name)}
+                                    className="text-xs font-bold px-3 py-1 rounded-full text-white bg-red-400 hover:bg-red-500">
+                                    Archive
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

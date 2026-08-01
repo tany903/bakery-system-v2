@@ -7,6 +7,7 @@ interface IngredientCardProps {
   onAdjustStock?: (id: string) => void
   onEdit?: (id: string) => void
   onArchive?: (id: string) => void
+  onRestore?: (id: string) => void
 }
 
 export default function IngredientCard({
@@ -14,6 +15,7 @@ export default function IngredientCard({
   onAdjustStock,
   onEdit,
   onArchive,
+  onRestore,
 }: IngredientCardProps) {
   const isLowStock = ingredient.current_stock < ingredient.minimum_threshold
   const stockPercentage = Math.min((ingredient.current_stock / ingredient.minimum_threshold) * 100, 100)
@@ -80,28 +82,37 @@ export default function IngredientCard({
 
         {/* Action buttons */}
         <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
-          {onAdjustStock && (
-            <button onClick={() => onAdjustStock(ingredient.id)}
-              className="w-full py-2 rounded-sm text-xs font-bold text-white"
-              style={{ backgroundColor: '#1a2340' }}>
-              Adjust Stock
+          {onRestore ? (
+            <button onClick={() => onRestore(ingredient.id)}
+              className="w-full py-2 rounded-sm text-xs font-bold text-white bg-green-600 hover:bg-green-700">
+              Restore
             </button>
-          )}
-          {(onEdit || onArchive) && (
-            <div className="flex gap-2">
-              {onEdit && (
-                <button onClick={() => onEdit(ingredient.id)}
-                  className="flex-1 py-2 rounded-sm text-xs font-bold text-white bg-gray-400 hover:bg-gray-500 transition-colors">
-                  Edit
+          ) : (
+            <>
+              {onAdjustStock && (
+                <button onClick={() => onAdjustStock(ingredient.id)}
+                  className="w-full py-2 rounded-sm text-xs font-bold text-white"
+                  style={{ backgroundColor: '#1a2340' }}>
+                  Adjust Stock
                 </button>
               )}
-              {onArchive && (
-                <button onClick={() => onArchive(ingredient.id)}
-                  className="flex-1 py-2 rounded-sm text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
-                  Archive
-                </button>
+              {(onEdit || onArchive) && (
+                <div className="flex gap-2">
+                  {onEdit && (
+                    <button onClick={() => onEdit(ingredient.id)}
+                      className="flex-1 py-2 rounded-sm text-xs font-bold text-white bg-gray-400 hover:bg-gray-500 transition-colors">
+                      Edit
+                    </button>
+                  )}
+                  {onArchive && (
+                    <button onClick={() => onArchive(ingredient.id)}
+                      className="flex-1 py-2 rounded-sm text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
+                      Archive
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
 

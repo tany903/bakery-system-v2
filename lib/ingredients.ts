@@ -11,12 +11,17 @@ export interface IngredientWithCategory extends Ingredient {
 // INGREDIENT CRUD
 // =============================================
 
-export async function getAllIngredients(): Promise<IngredientWithCategory[]> {
-  const { data, error } = await supabase
+export async function getAllIngredients(includeArchived = false): Promise<IngredientWithCategory[]> {
+  let query = supabase
     .from('ingredients')
     .select(`*, ingredient_categories (*)`)
-    .eq('is_archived', false)
     .order('name')
+
+  if (!includeArchived) {
+    query = query.eq('is_archived', false)
+  }
+
+  const { data, error } = await query
 
   if (error) throw error
   return data || []
