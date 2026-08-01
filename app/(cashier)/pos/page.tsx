@@ -635,7 +635,7 @@ export default function POSPage() {
           <div className="w-full max-w-md flex flex-col gap-3">
             <div className="flex justify-end">
               <button onClick={() => setShowCash(false)}
-                className="px-4 py-2 bg-white rounded-sm text-sm font-bold text-gray-700 hover:bg-gray-100"
+                className="px-4 py-2 bg-white rounded-sm text-sm font-bold text-gray-900 hover:bg-gray-100"
                 style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.2)' }}>
                 ✕ Close
               </button>
