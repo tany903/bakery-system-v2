@@ -544,7 +544,7 @@ export default function POSPage() {
                 <div className="mb-3 px-3 py-2 rounded-sm border border-blue-200 bg-blue-50">
                   <p className="text-xs font-black text-blue-700 mb-0.5">💳 Online Payment</p>
                   <p className="text-xs text-blue-600 leading-relaxed">
-                    This sale will <span className="font-bold">not</span> be added on Cash on Hand.
+                    This sale will <span className="font-bold">not</span> be added on the Cash Register.
                   </p> 
                   <div className="mt-1.5 flex flex-col gap-0.5">
                     <p className="text-xs text-blue-500">✓ Recorded in sales & analytics</p>
