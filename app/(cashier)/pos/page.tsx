@@ -10,7 +10,7 @@ import {
   type NewReservationItem,
 } from '@/lib/reservations'
 import {
-  createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal,
+  createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal, getEffectivePrice,
   type CartItem, type SalesStats,
 } from '@/lib/sales'
 import type { Product } from '@/lib/supabase'
@@ -42,6 +42,7 @@ export default function POSPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userId, setUserId] = useState('')
+  const [cashierName, setCashierName] = useState('')
   const [products, setProducts] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -86,6 +87,7 @@ export default function POSPage() {
       router.push('/login'); return
     }
     setUserId(user.id)
+    setCashierName(profile.full_name || 'Unknown')
     await loadData()
     setLoading(false)
   }
@@ -193,13 +195,36 @@ export default function POSPage() {
     if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
     setProcessing(true); setError('')
     try {
-      const sale = await createSale(cart, paymentMethod, userId)
-      const { data: fullSale } = await supabase
+      const cartSnapshot = cart
+      const sale = await createSale(cartSnapshot, paymentMethod, userId)
+
+      // Fetch only the sale row (no joins) to get DB-generated sale_number and sale_date.
+      // The profiles join silently returns null when PostgREST doesn't recognise the FK,
+      // which sets lastSale to null and prevents the receipt from showing.
+      const { data: fetchedSale } = await supabase
         .from('sales')
-        .select('*, sale_items (*), profiles (full_name)')
+        .select('*')
         .eq('id', sale.id)
         .single()
-      setLastSale(fullSale)
+
+      const baseSale = fetchedSale ?? sale
+
+      const receiptSale = {
+        ...baseSale,
+        sale_items: cartSnapshot.map(item => ({
+          id: item.product.id,
+          sale_id: baseSale.id,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          quantity: item.quantity,
+          unit_price: getEffectivePrice(item),
+          subtotal: getItemSubtotal(item),
+          created_at: baseSale.created_at,
+        })),
+        profiles: { full_name: cashierName || 'Unknown' },
+      }
+
+      setLastSale(receiptSale)
       setShowReceipt(true)
       clearCart()
       await loadData()
@@ -545,7 +570,7 @@ export default function POSPage() {
                   <p className="text-xs font-black text-blue-700 mb-0.5">💳 Online Payment</p>
                   <p className="text-xs text-blue-600 leading-relaxed">
                     This sale will <span className="font-bold">not</span> be added on the Cash Register.
-                  </p> 
+                  </p>
                   <div className="mt-1.5 flex flex-col gap-0.5">
                     <p className="text-xs text-blue-500">✓ Recorded in sales & analytics</p>
                     <p className="text-xs text-blue-500">✓ Inventory will be deducted</p>
