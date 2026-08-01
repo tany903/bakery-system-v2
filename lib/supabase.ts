@@ -72,6 +72,8 @@ export interface Sale {
   cashier_id: string
   sale_date: string
   created_at: string
+  amount_tendered: number | null
+  change_amount: number | null
 }
 
 export interface SaleItem {

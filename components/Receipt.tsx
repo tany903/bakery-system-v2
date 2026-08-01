@@ -11,6 +11,11 @@ interface ReceiptProps {
 export default function Receipt({ sale, onClose }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null)
 
+  const showCashBreakdown =
+    sale.payment_method === 'cash' &&
+    sale.amount_tendered !== null &&
+    sale.amount_tendered !== undefined
+
   const handlePrint = () => {
     const printContent = receiptRef.current
     if (!printContent) return
@@ -60,6 +65,11 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
               font-size: 16px;
               font-weight: bold;
             }
+            .cash-breakdown {
+              margin-top: 8px;
+              padding-top: 8px;
+              font-size: 14px;
+            }
             .footer {
               text-align: center;
               margin-top: 20px;
@@ -80,7 +90,7 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
 
     printWindow.document.close()
     printWindow.focus()
-    
+
     setTimeout(() => {
       printWindow.print()
       printWindow.close()
@@ -143,6 +153,20 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
               <span className="font-bold" style={{ color: '#111111' }}>₱{sale.total_amount.toFixed(2)}</span>
             </div>
           </div>
+
+          {/* Cash Received / Change */}
+          {showCashBreakdown && (
+            <div className="cash-breakdown mt-2 pt-2">
+              <div className="flex justify-between text-sm">
+                <span style={{ color: '#555555' }}>Amount Received:</span>
+                <span className="font-bold" style={{ color: '#111111' }}>₱{sale.amount_tendered!.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm mt-1">
+                <span style={{ color: '#555555' }}>Change:</span>
+                <span className="font-bold" style={{ color: '#111111' }}>₱{(sale.change_amount ?? 0).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="footer text-center mt-6 pt-4 border-t border-dashed border-gray-800 text-sm" style={{ color: '#444444' }}>

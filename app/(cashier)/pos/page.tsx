@@ -55,6 +55,7 @@ export default function POSPage() {
   const [error, setError] = useState('')
   const [maxDiscountPct, setMaxDiscountPct] = useState(30)
   const [showCash, setShowCash] = useState(false)
+  const [cashReceived, setCashReceived] = useState('')
 
   // Custom discount modal
   const [showDiscountModal, setShowDiscountModal] = useState(false)
@@ -77,6 +78,7 @@ export default function POSPage() {
   const [customerPhone, setCustomerPhone] = useState('')
 
   useEffect(() => { checkAuth() }, [])
+  useEffect(() => { setCashReceived('') }, [paymentMethod, cart.length])
   useRealtimeRefresh(['products', 'sales', 'sale_items'], loadData)
 
   async function checkAuth() {
@@ -193,10 +195,26 @@ export default function POSPage() {
 
   async function processPayment() {
     if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
+
+    const tenderedNum = paymentMethod === 'cash' ? parseFloat(cashReceived) : undefined
+
+    if (paymentMethod === 'cash') {
+      if (!cashReceived || isNaN(tenderedNum!)) {
+        setError('Enter the amount received')
+        setTimeout(() => setError(''), 3000)
+        return
+      }
+      if (tenderedNum! < cartTotal) {
+        setError('Amount received is less than the total')
+        setTimeout(() => setError(''), 3000)
+        return
+      }
+    }
+
     setProcessing(true); setError('')
     try {
       const cartSnapshot = cart
-      const sale = await createSale(cartSnapshot, paymentMethod, userId)
+      const sale = await createSale(cartSnapshot, paymentMethod, userId, tenderedNum)
 
       // Fetch only the sale row (no joins) to get DB-generated sale_number and sale_date.
       // The profiles join silently returns null when PostgREST doesn't recognise the FK,
@@ -227,6 +245,7 @@ export default function POSPage() {
       setLastSale(receiptSale)
       setShowReceipt(true)
       clearCart()
+      setCashReceived('')
       await loadData()
     } catch (err: any) {
       setError(err.message || 'Payment failed')
@@ -565,6 +584,34 @@ export default function POSPage() {
                     : { borderColor: '#e5e7eb', color: '#374151' }
                   }>💳 Online</button>
               </div>
+
+              {paymentMethod === 'cash' && (
+                <div className="mb-3 px-3 py-3 rounded-sm border border-gray-200 bg-gray-50">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Amount Received</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    value={cashReceived}
+                    onChange={e => setCashReceived(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full text-lg font-black px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none focus:border-gray-400"
+                  />
+                  {cashReceived && !isNaN(parseFloat(cashReceived)) && (
+                    <div className="flex justify-between items-center mt-2 px-1">
+                      <span className="text-xs font-bold text-gray-500">Change</span>
+                      <span
+                        className="text-lg font-black"
+                        style={{ color: parseFloat(cashReceived) < cartTotal ? '#EF4444' : '#10B981' }}
+                      >
+                        ₱{(parseFloat(cashReceived) - cartTotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {paymentMethod === 'online' && (
                 <div className="mb-3 px-3 py-2 rounded-sm border border-blue-200 bg-blue-50">
                   <p className="text-xs font-black text-blue-700 mb-0.5">💳 Online Payment</p>
@@ -578,7 +625,9 @@ export default function POSPage() {
                   </div>
                 </div>
               )}
-              <button onClick={processPayment} disabled={processing}
+
+              <button onClick={processPayment}
+                disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < cartTotal))}
                 className="w-full py-3 rounded-sm font-black text-white text-base disabled:opacity-50 mb-2 transition-colors"
                 style={{ backgroundColor: paymentMethod === 'online' ? '#1a2340' : '#10B981' }}>
                 {processing

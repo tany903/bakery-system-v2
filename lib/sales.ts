@@ -53,9 +53,22 @@ export async function getMaxDiscountPct(): Promise<number> {
 export async function createSale(
   items: CartItem[],
   paymentMethod: 'cash' | 'online',
-  cashierId: string
+  cashierId: string,
+  amountTendered?: number
 ): Promise<Sale> {
   const totalAmount = items.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+
+  // Only cash sales track tendered/change. Online payments leave both null.
+  const tendered = paymentMethod === 'cash' && amountTendered !== undefined
+    ? amountTendered
+    : null
+  const changeAmount = tendered !== null
+    ? Math.round((tendered - totalAmount) * 100) / 100
+    : null
+
+  if (paymentMethod === 'cash' && tendered !== null && tendered < totalAmount) {
+    throw new Error('Amount received is less than the total due')
+  }
 
   const { data: sale, error: saleError } = await supabase
     .from('sales')
@@ -63,6 +76,8 @@ export async function createSale(
       payment_method: paymentMethod,
       total_amount: totalAmount,
       cashier_id: cashierId,
+      amount_tendered: tendered,
+      change_amount: changeAmount,
     })
     .select()
     .single()
