@@ -162,7 +162,7 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
           </button>
           <button
             onClick={onClose}
-            className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+            className="flex-1 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium text-gray-900"
           >
             Close
           </button>
