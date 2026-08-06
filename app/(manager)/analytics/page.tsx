@@ -792,29 +792,23 @@ export default function AnalyticsPage() {
                               {p.product_name}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">
-                              Stock: {p.current_shop_stock} pcs
-                              {p.method === 'forecast'
-                                ? ` • Forecast: ${p.forecast_daily_demand}/day`
-                                : ` • Min threshold: ${p.minimum_threshold} pcs`}
+                              Stock: {p.current_shop_stock} pcs • Forecast: {p.forecast_daily_demand}/day
                             </p>
                             {p.days_until_stockout !== null && (
                               <p className={`text-xs font-semibold mt-0.5 ${p.urgency === 'critical' ? 'text-red-600' : p.urgency === 'warning' ? 'text-yellow-600' : 'text-gray-400'}`}>
                                 {p.days_until_stockout === 0 ? 'Stockout today!' : `Runs out in ~${p.days_until_stockout} day${p.days_until_stockout !== 1 ? 's' : ''}`}
                               </p>
                             )}
-                            {p.method === 'threshold_fallback' && (
-                              <p className="text-xs text-gray-400 mt-0.5 italic">Gathering sales data — using minimum-stock rule for now</p>
-                            )}
-                            {p.method === 'forecast' && p.accuracy_mape !== null && (
+                            {p.accuracy_mape !== null && (
                               <p className="text-xs text-gray-400 mt-0.5">Forecast accuracy: {Math.max(0, 100 - p.accuracy_mape).toFixed(0)}%</p>
                             )}
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-black" style={{ color: '#F5A623' }}>+{p.recommended_restock} pcs</p>
-                            <p className="text-xs text-gray-400">{p.method === 'forecast' ? '7-day supply' : 'up to threshold'}</p>
+                            <p className="text-xs text-gray-400">7-day supply</p>
                           </div>
                         </div>
-                        {p.method === 'forecast' && p.prediction_history.length > 1 && (
+                        {p.prediction_history.length > 1 && (
                           <div className="mt-3 h-16">
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart data={p.prediction_history}>

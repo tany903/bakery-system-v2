@@ -44,13 +44,12 @@ export interface RestockRecommendation {
   product_name: string
   current_shop_stock: number
   minimum_threshold: number
-  forecast_daily_demand: number | null
+  forecast_daily_demand: number
   days_until_stockout: number | null
   recommended_restock: number
   urgency: 'critical' | 'warning' | 'ok'
   accuracy_mape: number | null
   prediction_history: PredictionPoint[]
-  method: 'forecast' | 'threshold_fallback'
 }
 
 export interface SalesTrend {
@@ -76,6 +75,7 @@ export async function getSalesSummary(
   const { data: sales, error: salesError } = await supabase
     .from('sales')
     .select('*')
+    .eq('is_voided', false)
     .gte('sale_date', startDate.toISOString())
     .lte('sale_date', endDate.toISOString())
 
@@ -84,6 +84,7 @@ export async function getSalesSummary(
   const { data: saleItems, error: itemsError } = await supabase
     .from('sale_items')
     .select(`*, sales!inner (sale_date)`)
+    .eq('sales.is_voided', false)
     .gte('sales.sale_date', startDate.toISOString())
     .lte('sales.sale_date', endDate.toISOString())
 
@@ -151,6 +152,7 @@ export async function getExpenseVsRevenue(): Promise<ExpenseVsRevenue[]> {
     const { data: sales } = await supabase
       .from('sales')
       .select('total_amount')
+      .eq('is_voided', false)
       .gte('sale_date', startDate.toISOString())
       .lte('sale_date', endDate.toISOString())
 
@@ -248,6 +250,7 @@ export async function getRestockRecommendations(): Promise<RestockRecommendation
   const { data: saleItems, error: itemsError } = await supabase
     .from('sale_items')
     .select(`*, sales!inner (sale_date)`)
+    .eq('sales.is_voided', false)
     .gte('sales.sale_date', windowStart.toISOString())
 
   if (itemsError) throw itemsError
@@ -268,28 +271,12 @@ export async function getRestockRecommendations(): Promise<RestockRecommendation
       const saleDayCount = saleDaysByProduct[product.id]?.size || 0
       const hasEnoughHistory = saleDayCount >= MIN_SALE_DAYS_FOR_FORECAST
 
-      if (!hasEnoughHistory) {
-        // Cold start: prescribe off the simple reorder-point rule instead of forecasting.
-        const belowThreshold = product.shop_current_stock <= product.shop_minimum_threshold
-        const recommended = belowThreshold ? Math.max(0, product.shop_minimum_threshold - product.shop_current_stock) : 0
-
-        let urgency: 'critical' | 'warning' | 'ok' = 'ok'
-        if (product.shop_current_stock === 0) urgency = 'critical'
-        else if (belowThreshold) urgency = 'warning'
-
-        return {
-          product_name: product.name,
-          current_shop_stock: product.shop_current_stock,
-          minimum_threshold: product.shop_minimum_threshold,
-          forecast_daily_demand: null,
-          days_until_stockout: null,
-          recommended_restock: recommended,
-          urgency,
-          accuracy_mape: null,
-          prediction_history: [],
-          method: 'threshold_fallback' as const,
-        }
-      }
+      // Products without enough sales history yet are skipped rather than
+      // shown via a threshold guess — with several low-history products at
+      // once, that fallback used to flood the card and bury the real,
+      // forecast-backed recommendations. They'll appear here automatically
+      // once they build up enough history.
+      if (!hasEnoughHistory) return null
 
       const series = buildDailySeries(dailyQuantitiesByProduct[product.id] || {}, HISTORY_WINDOW_DAYS)
       const { nextForecast, mape, history } = runExponentialSmoothing(series)
@@ -314,10 +301,9 @@ export async function getRestockRecommendations(): Promise<RestockRecommendation
         urgency,
         accuracy_mape: mape,
         prediction_history: history.slice(-14), // last 14 days is plenty for the chart
-        method: 'forecast' as const,
       }
     })
-    .filter(p => p.method === 'forecast' ? p.forecast_daily_demand! > 0 : p.recommended_restock > 0)
+    .filter((r): r is RestockRecommendation => r !== null && r.forecast_daily_demand > 0)
     .sort((a, b) => ({ critical: 0, warning: 1, ok: 2 }[a.urgency] - { critical: 0, warning: 1, ok: 2 }[b.urgency]))
 }
 
@@ -353,8 +339,10 @@ export async function getSalesTrend(period: Period): Promise<SalesTrend> {
   }
 
   const { data: current } = await supabase.from('sales').select('total_amount')
+    .eq('is_voided', false)
     .gte('sale_date', currentStart.toISOString()).lte('sale_date', currentEnd.toISOString())
   const { data: previous } = await supabase.from('sales').select('total_amount')
+    .eq('is_voided', false)
     .gte('sale_date', prevStart.toISOString()).lte('sale_date', prevEnd.toISOString())
 
   const currentRevenue = (current || []).reduce((sum, s) => sum + Number(s.total_amount), 0)
@@ -379,6 +367,7 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
   const { data: saleItems, error } = await supabase
     .from('sale_items')
     .select(`quantity, sales!inner (sale_date)`)
+    .eq('sales.is_voided', false)
     .gte('sales.sale_date', thirtyDaysAgo.toISOString())
 
   if (error) throw error
@@ -526,6 +515,7 @@ export async function getWeeklyBreakdown(year: number, month: number): Promise<W
   const { data: sales } = await supabase
     .from('sales')
     .select('sale_date, total_amount')
+    .eq('is_voided', false)
     .gte('sale_date', startOfMonth.toISOString())
     .lte('sale_date', endOfMonth.toISOString())
 
