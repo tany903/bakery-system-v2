@@ -103,7 +103,20 @@ function VoidModal({
   onCancel: () => void
   loading: boolean
 }) {
-  const [reason, setReason] = useState('')
+  const VOID_REASONS = [
+    'Data entry error',
+    'Customer cancellation',
+    'Duplicate transaction',
+    'Wrong item recorded',
+    'Wrong quantity recorded',
+    'Spoiled / damaged goods',
+    'Manager override',
+    'Other',
+  ]
+  const [selectedReason, setSelectedReason] = useState('')
+  const [otherText, setOtherText] = useState('')
+  const isOther = selectedReason === 'Other'
+  const finalReason = isOther ? otherText.trim() : selectedReason
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}>
       <div className="bg-white rounded-sm w-full max-w-md mx-4 overflow-hidden" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.35)' }}>
@@ -113,18 +126,30 @@ function VoidModal({
         </div>
         <div className="p-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">Void Reason <span className="text-red-500">*</span></label>
-          <textarea
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="Enter reason for voiding..."
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 resize-none text-gray-900 placeholder-gray-400"
-          />
+          <select
+            value={selectedReason}
+            onChange={e => { setSelectedReason(e.target.value); setOtherText('') }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 text-gray-900 bg-white mb-3"
+          >
+            <option value="">Select a reason...</option>
+            {VOID_REASONS.map(r => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          {isOther && (
+            <textarea
+              value={otherText}
+              onChange={e => setOtherText(e.target.value)}
+              placeholder="Describe the reason..."
+              rows={3}
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-300 rounded-sm text-sm focus:outline-none focus:border-red-400 resize-none text-gray-900 placeholder-gray-400"
+            />
+          )}
           <div className="flex gap-3 mt-4">
-            
             <button
-              onClick={() => reason.trim() && onConfirm(reason.trim())}
-              disabled={loading || !reason.trim()}
+              onClick={() => finalReason && onConfirm(finalReason)}
+              disabled={loading || !finalReason}
               className="flex-1 px-4 py-2 rounded-sm text-sm font-bold text-white transition-colors disabled:opacity-50"
               style={{ backgroundColor: '#7B1111' }}>
               {loading ? 'Voiding…' : 'Confirm Void'}
