@@ -660,9 +660,9 @@ export default function AnalyticsPage() {
           <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.cashRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
         </div>
         <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">GCash / Card</p>
-          <p className="text-2xl font-black text-blue-400">₱{(dailyData.gcashRevenue + dailyData.cardRevenue).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-          <p className="text-white text-xs opacity-50 mt-1">GCash ₱{dailyData.gcashRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })} · Card ₱{dailyData.cardRevenue.toLocaleString('en-PH', { minimumFractionDigits: 0 })}</p>
+          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Online</p>
+          <p className="text-2xl font-black text-blue-400">₱{dailyData.onlineRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+          <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.onlineRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
         </div>
         <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
           <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Voided</p>

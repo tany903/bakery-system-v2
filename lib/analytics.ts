@@ -572,8 +572,7 @@ export interface DailySalesBreakdown {
   totalRevenue: number
   totalTransactions: number
   cashRevenue: number
-  gcashRevenue: number
-  cardRevenue: number
+  onlineRevenue: number
   items: DailySalesItem[]
   voidedCount: number
   voidedRevenue: number
@@ -598,8 +597,7 @@ export async function getDailySalesBreakdown(date: Date): Promise<DailySalesBrea
 
   const totalRevenue = activeSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
   const cashRevenue = activeSales.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + Number(s.total_amount), 0)
-  const gcashRevenue = activeSales.filter(s => s.payment_method === 'gcash').reduce((sum, s) => sum + Number(s.total_amount), 0)
-  const cardRevenue = activeSales.filter(s => s.payment_method === 'card').reduce((sum, s) => sum + Number(s.total_amount), 0)
+  const onlineRevenue = activeSales.filter(s => s.payment_method === 'online').reduce((sum, s) => sum + Number(s.total_amount), 0)
   const voidedRevenue = voidedSales.reduce((sum, s) => sum + Number(s.total_amount), 0)
 
   // Aggregate items across all active sales
@@ -621,8 +619,7 @@ export async function getDailySalesBreakdown(date: Date): Promise<DailySalesBrea
     totalRevenue,
     totalTransactions: activeSales.length,
     cashRevenue,
-    gcashRevenue,
-    cardRevenue,
+    onlineRevenue,
     items,
     voidedCount: voidedSales.length,
     voidedRevenue,
