@@ -18,7 +18,7 @@ const links = [
 export default function ManagerSidebar() {
   const pathname = usePathname()
   return (
-    <div className="relative z-10 flex flex-col gap-2 p-3 w-28 shrink-0">
+    <div className="relative z-10 flex flex-col gap-2 p-3 w-28 shrink-0 sticky top-0 h-screen overflow-y-auto">
       {links.map(link => {
         const active = pathname === link.href
         return (
