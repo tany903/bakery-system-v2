@@ -233,7 +233,7 @@ export default function ManagerDashboard() {
   ]
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
 
       {/* TOP NAVBAR */}
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>

@@ -392,7 +392,7 @@ export default function PurchaseOrdersPage() {
   const isManager = userRole === 'manager'
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
 
       {/* NAVBAR */}
       {isManager ? (
@@ -436,7 +436,7 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
-      <div className="flex flex-1 relative overflow-hidden">
+      <div className="flex flex-1 relative">
         <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
           style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />

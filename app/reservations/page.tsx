@@ -475,7 +475,7 @@ export default function ReservationsPage() {
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
         <Branding /><LogoutButton />
       </div>
-      <div className="flex flex-1 relative overflow-hidden">
+      <div className="flex flex-1 relative">
         <Watermark /><ManagerSidebar />{mainContent}
       </div>
       {completeModal}
