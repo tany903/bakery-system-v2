@@ -353,7 +353,7 @@ const productionNavLinks = [
     const paginated = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+      <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
         <CashierTopNav />
         <div className="flex flex-1 relative">
           <Watermark />
@@ -453,7 +453,7 @@ const productionNavLinks = [
     const paginated = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+      <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
         <div className="relative z-10 w-full flex items-center gap-6 px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
@@ -590,7 +590,7 @@ const productionNavLinks = [
   const paginated = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <TopNav />
       <div className="flex flex-1 relative">
         <Watermark />

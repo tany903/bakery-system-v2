@@ -331,7 +331,7 @@ const productionNavLinks = [
   // ── PRODUCTION — top nav ──
   if (userRole === 'production') {
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+      <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
         <div className="relative z-10 w-full flex items-center gap-6 px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
           <Branding />
           <div className="flex gap-2">
@@ -359,7 +359,7 @@ const productionNavLinks = [
 
   // ── MANAGER — sidebar, view only ──
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
         <Branding />
         <LogoutButton />
