@@ -392,7 +392,7 @@ export default function PurchaseOrdersPage() {
   const isManager = userRole === 'manager'
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#F5A623' }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
 
       {/* NAVBAR */}
       {isManager ? (
