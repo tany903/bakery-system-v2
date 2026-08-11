@@ -37,6 +37,7 @@ export default function ProductsPage() {
   const [filterCategory, setFilterCategory] = useState<string>('all')
   const [filterStock, setFilterStock] = useState<string>('all')
   const [showArchived, setShowArchived] = useState(false)
+  const [showCategoriesArchived, setShowCategoriesArchived] = useState(false)
 
   // Categories state
   const [showCategoryModal, setShowCategoryModal] = useState(false)
@@ -48,7 +49,7 @@ export default function ProductsPage() {
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { if (!loading) loadProducts() }, [filterCategory, filterStock, showArchived, loading])
-  useEffect(() => { if (!loading) loadCategories() }, [showArchived, loading])
+  useEffect(() => { if (!loading) loadCategories() }, [showCategoriesArchived, loading])
   useRealtimeRefresh(['products', 'categories'], () => { loadProducts(); loadCategories() })
 
   async function checkAuth() {
@@ -61,7 +62,7 @@ export default function ProductsPage() {
   }
 
   async function loadCategories() {
-    try { setCategories(await getAllCategories(showArchived)) } catch {}
+    try { setCategories(await getAllCategories(showCategoriesArchived)) } catch {}
   }
 
   async function loadProducts() {
@@ -268,9 +269,9 @@ export default function ProductsPage() {
             </div>
             <div className="flex gap-2">
               {[{ v: false, label: 'Active' }, { v: true, label: 'Archived' }].map(opt => (
-                <button key={opt.label} onClick={() => setShowArchived(opt.v)}
+                <button key={opt.label} onClick={() => activeTab === 'products' ? setShowArchived(opt.v) : setShowCategoriesArchived(opt.v)}
                   className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
-                  style={showArchived === opt.v
+                  style={(activeTab === 'products' ? showArchived : showCategoriesArchived) === opt.v
                     ? { backgroundColor: '#7B1111', color: 'white' }
                     : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
                   }>
@@ -333,7 +334,7 @@ export default function ProductsPage() {
             <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
               <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
                 <img src="/icons/Tag.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
-                <h2 className="font-bold text-white">{showArchived ? 'Archived Categories' : 'All Categories'}</h2>
+                <h2 className="font-bold text-white">{showCategoriesArchived ? 'Archived Categories' : 'All Categories'}</h2>
                 <span className="ml-auto text-xs text-white opacity-60">{categories.length} categories</span>
               </div>
               <table className="w-full">
@@ -348,7 +349,7 @@ export default function ProductsPage() {
                 </thead>
                 <tbody>
                   {categories.length === 0 ? (
-                    <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">{showArchived ? 'No archived categories' : 'No categories yet'}</td></tr>
+                    <tr><td colSpan={5} className="px-5 py-10 text-center text-gray-400 text-sm">{showCategoriesArchived ? 'No archived categories' : 'No categories yet'}</td></tr>
                   ) : (
                     categories.map(cat => {
                       const count = products.filter(p => (p as any).category_id === cat.id).length
@@ -364,7 +365,7 @@ export default function ProductsPage() {
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex gap-2">
-                              {showArchived ? (
+                              {showCategoriesArchived ? (
                                 <button onClick={() => handleRestoreCategory(cat.id, cat.name)}
                                   className="text-xs font-bold px-3 py-1 rounded-full text-white bg-green-600 hover:bg-green-700">
                                   Restore

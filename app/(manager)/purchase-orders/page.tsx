@@ -436,7 +436,7 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
 
-      <div className="flex flex-1 relative overflow-hidden">
+      <div className="flex flex-1 relative">
         <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
           style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />

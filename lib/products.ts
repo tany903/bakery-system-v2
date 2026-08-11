@@ -184,13 +184,15 @@ export async function updateStock(
 // CATEGORIES
 // =============================================
 
-export async function getAllCategories(includeArchived = false): Promise<Category[]> {
+export async function getAllCategories(archivedOnly = false): Promise<Category[]> {
   let query = supabase
     .from('categories')
     .select('*')
     .order('name')
 
-  if (!includeArchived) {
+  if (archivedOnly) {
+    query = query.eq('is_archived', true)
+  } else {
     query = query.eq('is_archived', false)
   }
 
