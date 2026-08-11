@@ -63,10 +63,18 @@ export async function recordProduction(
   return productionRecord
 }
 
+// NOTE: these fetch functions exclude voided records (is_voided = false),
+// matching the convention used throughout analytics.ts and cash-register.ts.
+// The one place that intentionally needs raw, unfiltered production rows —
+// the manager's Transactions page, to display voided entries with
+// strikethrough styling and a "Voided" badge — queries Supabase directly and
+// does not go through these functions, so this filter doesn't affect it.
+
 export async function getAllProductionRecords(): Promise<ProductionWithDetails[]> {
   const { data, error } = await supabase
     .from('production')
     .select('*, products (*), produced_by_profile:profiles!production_produced_by_fkey (full_name)')
+    .eq('is_voided', false)
     .order('production_date', { ascending: false })
 
   if (error) throw error
@@ -81,6 +89,7 @@ export async function getTodaysProductionRecords(): Promise<ProductionWithDetail
     .from('production')
     .select('*, products (*), produced_by_profile:profiles!production_produced_by_fkey (full_name)')
     .gte('production_date', today.toISOString())
+    .eq('is_voided', false)
     .order('production_date', { ascending: false })
 
   if (error) throw error
@@ -96,6 +105,7 @@ export async function getProductionByDateRange(
     .select('*, products (*), produced_by_profile:profiles!production_produced_by_fkey (full_name)')
     .gte('production_date', startDate.toISOString())
     .lte('production_date', endDate.toISOString())
+    .eq('is_voided', false)
     .order('production_date', { ascending: false })
 
   if (error) throw error
@@ -110,6 +120,7 @@ export async function getTodaysProductionStats(): Promise<ProductionStats> {
     .from('production')
     .select('*, products (name)')
     .gte('production_date', today.toISOString())
+    .eq('is_voided', false)
 
   if (error) throw error
 

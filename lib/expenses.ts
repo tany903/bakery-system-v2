@@ -97,9 +97,15 @@ export async function getAllExpenses(): Promise<ExpenseWithCategory[]> {
 }
 
 export async function getExpensesByDateRange(
-  startDate: Date,
-  endDate: Date
+  startDate: string,
+  endDate: string
 ): Promise<ExpenseWithCategory[]> {
+  // Expects plain 'YYYY-MM-DD' strings (matching the `expense_date` column's
+  // date type). Deliberately not `Date` objects: a Date carries no timezone
+  // tag, so whether `new Date(...)` means local midnight or UTC midnight
+  // depends entirely on how the caller constructed it, which previously made
+  // this function's date-range filtering silently wrong depending on the
+  // caller's convention. A string is unambiguous.
   const { data, error } = await supabase
     .from('expenses')
     .select(`
@@ -107,8 +113,8 @@ export async function getExpensesByDateRange(
       expense_categories (*),
       recorded_by_profile:profiles!expenses_recorded_by_fkey (full_name)
     `)
-    .gte('expense_date', startDate.toISOString().split('T')[0])
-    .lte('expense_date', endDate.toISOString().split('T')[0])
+    .gte('expense_date', startDate)
+    .lte('expense_date', endDate)
     .order('expense_date', { ascending: false })
 
   if (error) throw error
@@ -181,18 +187,26 @@ export async function deleteExpense(id: string): Promise<void> {
 // EXPENSE SUMMARY / STATS
 // =============================================
 
+function formatLocalDate(d: Date): string {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 export async function getMonthlyExpenseSummary(
   year: number,
   month: number
 ): Promise<ExpenseSummary> {
   const startDate = new Date(year, month - 1, 1)
   const endDate = new Date(year, month, 0)
+  const nextMonthStart = new Date(year, month, 1)
 
   const { data: expenses, error: expenseError } = await supabase
     .from('expenses')
     .select(`*, expense_categories (name)`)
-    .gte('expense_date', startDate.toISOString().split('T')[0])
-    .lte('expense_date', endDate.toISOString().split('T')[0])
+    .gte('expense_date', formatLocalDate(startDate))
+    .lte('expense_date', formatLocalDate(endDate))
 
   if (expenseError) throw expenseError
 
@@ -200,7 +214,7 @@ export async function getMonthlyExpenseSummary(
     .from('sales')
     .select('total_amount')
     .gte('sale_date', startDate.toISOString())
-    .lte('sale_date', endDate.toISOString())
+    .lt('sale_date', nextMonthStart.toISOString())
 
   if (salesError) throw salesError
 

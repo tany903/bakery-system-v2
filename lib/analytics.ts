@@ -207,7 +207,10 @@ function buildDailySeries(dailyQuantities: { [date: string]: number }, windowDay
 // historical series, scoring each day's forecast against that day's actual
 // sales as it becomes known (this is the "verify accuracy against new data"
 // step), then return the next-day forecast plus the accuracy score.
-function runExponentialSmoothing(series: number[]): {
+
+
+// function runExponentialSmoothing(series: number[]): { REMEMBER TO CHANGE THIS BACK PLEASE 
+export function runExponentialSmoothing(series: number[]): {
   nextForecast: number
   mape: number | null
   history: PredictionPoint[]
