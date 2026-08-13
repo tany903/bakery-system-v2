@@ -11,6 +11,7 @@ export interface Supplier {
   address: string | null
   notes: string | null
   is_archived: boolean
+  archived_at: string | null
   created_at: string
 }
 
@@ -80,6 +81,16 @@ export async function getAllSuppliers(): Promise<Supplier[]> {
   return data || []
 }
 
+export async function getArchivedSuppliers(): Promise<Supplier[]> {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('is_archived', true)
+    .order('archived_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 export async function createSupplier(supplier: {
   name: string
   contact_person?: string
@@ -104,7 +115,7 @@ export async function createSupplier(supplier: {
   return data
 }
 
-export async function updateSupplier(id: string, updates: Partial<Omit<Supplier, 'id' | 'created_at' | 'is_archived'>>): Promise<void> {
+export async function updateSupplier(id: string, updates: Partial<Omit<Supplier, 'id' | 'created_at' | 'is_archived' | 'archived_at'>>): Promise<void> {
   const { error } = await supabase
     .from('suppliers')
     .update(updates)
@@ -115,7 +126,15 @@ export async function updateSupplier(id: string, updates: Partial<Omit<Supplier,
 export async function archiveSupplier(id: string): Promise<void> {
   const { error } = await supabase
     .from('suppliers')
-    .update({ is_archived: true })
+    .update({ is_archived: true, archived_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function restoreSupplier(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('suppliers')
+    .update({ is_archived: false, archived_at: null })
     .eq('id', id)
   if (error) throw error
 }

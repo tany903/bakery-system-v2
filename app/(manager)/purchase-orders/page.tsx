@@ -8,8 +8,8 @@ import { getAllExpenseCategories } from '@/lib/expenses'
 import type { ExpenseCategory } from '@/lib/supabase'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import {
-  getAllPurchaseOrders, getAllSuppliers, createPurchaseOrder, createSupplier,
-  updateSupplier, archiveSupplier,
+  getAllPurchaseOrders, getAllSuppliers, getArchivedSuppliers, createPurchaseOrder, createSupplier,
+  updateSupplier, archiveSupplier, restoreSupplier,
   submitPurchaseOrder, approvePurchaseOrder, rejectPurchaseOrder,
   cancelPurchaseOrder, receivePurchaseOrder,
   type PurchaseOrderWithDetails, type PurchaseOrderItem, type Supplier, type NewPOItem,
@@ -55,6 +55,8 @@ export default function PurchaseOrdersPage() {
   const [userRole, setUserRole] = useState<'manager' | 'production'>('manager')
   const [orders, setOrders] = useState<PurchaseOrderWithDetails[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [archivedSuppliers, setArchivedSuppliers] = useState<Supplier[]>([])
+  const [supplierView, setSupplierView] = useState<'active' | 'archived'>('active')
   const [ingredients, setIngredients] = useState<IngredientWithCategory[]>([])
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [error, setError] = useState('')
@@ -121,14 +123,16 @@ export default function PurchaseOrdersPage() {
 
   async function loadAll() {
     try {
-      const [ordersData, suppliersData, ingredientsData, expCatData] = await Promise.all([
+      const [ordersData, suppliersData, archivedSuppliersData, ingredientsData, expCatData] = await Promise.all([
         getAllPurchaseOrders(),
         getAllSuppliers(),
+        getArchivedSuppliers(),
         getAllIngredients(),
         getAllExpenseCategories(),
       ])
       setOrders(ordersData)
       setSuppliers(suppliersData)
+      setArchivedSuppliers(archivedSuppliersData)
       setIngredients(ingredientsData)
       setExpenseCategories(expCatData)
     } catch { setError('Failed to load data') }
@@ -310,12 +314,20 @@ export default function PurchaseOrdersPage() {
   }
 
   async function handleArchiveSupplier(s: Supplier) {
-    if (!confirm(`Archive "${s.name}"? They won't appear in new PO dropdowns.`)) return
+    if (!confirm(`Archive "${s.name}"? They won't appear in new PO dropdowns. You can restore them from the Archived tab anytime.`)) return
     try {
       await archiveSupplier(s.id)
       flash('Supplier archived')
       await loadAll()
     } catch (err: any) { flash(err.message || 'Failed to archive', true) }
+  }
+
+  async function handleRestoreSupplier(s: Supplier) {
+    try {
+      await restoreSupplier(s.id)
+      flash('Supplier restored')
+      await loadAll()
+    } catch (err: any) { flash(err.message || 'Failed to restore', true) }
   }
 
   const handleLogout = async () => { await signOut(); router.push('/login') }
@@ -634,40 +646,94 @@ export default function PurchaseOrdersPage() {
           {/* ── SUPPLIERS TAB (manager only) ── */}
           {activeTab === 'suppliers' && isManager && (
             <>
-              {suppliers.length === 0 ? (
-                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                  <div className="text-5xl mb-3">🏭</div>
-                  <p className="text-lg font-bold text-gray-600">No suppliers saved yet</p>
-                  <button onClick={() => setShowNewSupplier(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Supplier</button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {suppliers.map(s => {
-                    const poCount = orders.filter(o => o.supplier_id === s.id).length
-                    return (
-                      <div key={s.id} className="bg-white rounded-sm overflow-hidden flex flex-col" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
-                        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#220901' }}>
-                          <p className="text-white font-black text-sm truncate">{s.name}</p>
-                          <span className="text-white text-xs opacity-50 shrink-0 ml-2">{poCount} PO{poCount !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="px-4 py-4 flex flex-col gap-2 flex-1 text-sm">
-                          {s.contact_person && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Contact</span><span className="font-semibold">{s.contact_person}</span></div>}
-                          {s.phone && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Phone</span><span>{s.phone}</span></div>}
-                          {s.email && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Email</span><span className="truncate">{s.email}</span></div>}
-                          {s.address && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Address</span><span className="text-xs">{s.address}</span></div>}
-                          {s.notes && <p className="text-xs text-gray-400 italic border-l-2 border-gray-100 pl-2 mt-1">{s.notes}</p>}
-                          {!s.contact_person && !s.phone && !s.email && !s.address && <p className="text-xs text-gray-300 italic">No contact info saved</p>}
-                          <div className="flex-1" />
-                          <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
-                            <button onClick={() => openEditSupplier(s)} className="text-xs font-bold px-3 py-1.5 rounded-sm" style={{ backgroundColor: '#1a2340', color: 'white' }}>Edit</button>
-                            <button onClick={() => { setShowNewPO(true); setPOSupplierId(s.id); setActiveTab('orders') }} className="text-xs font-bold px-3 py-1.5 rounded-sm border border-gray-200 text-gray-600 hover:bg-gray-50">+ New PO</button>
-                            <button onClick={() => handleArchiveSupplier(s)} className="text-xs font-bold px-3 py-1.5 rounded-sm text-white ml-auto" style={{ backgroundColor: '#9CA3AF' }}>Archive</button>
+              <div className="flex gap-2 mb-5">
+                <button onClick={() => setSupplierView('active')}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                  style={supplierView === 'active'
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                  Active
+                </button>
+                <button onClick={() => setSupplierView('archived')}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                  style={supplierView === 'archived'
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                  Archived ({archivedSuppliers.length})
+                </button>
+              </div>
+
+              {supplierView === 'active' ? (
+                suppliers.length === 0 ? (
+                  <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                    <div className="text-5xl mb-3">🏭</div>
+                    <p className="text-lg font-bold text-gray-600">No suppliers saved yet</p>
+                    <button onClick={() => setShowNewSupplier(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Supplier</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {suppliers.map(s => {
+                      const poCount = orders.filter(o => o.supplier_id === s.id).length
+                      return (
+                        <div key={s.id} className="bg-white rounded-sm overflow-hidden flex flex-col" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
+                          <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#220901' }}>
+                            <p className="text-white font-black text-sm truncate">{s.name}</p>
+                            <span className="text-white text-xs opacity-50 shrink-0 ml-2">{poCount} PO{poCount !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div className="px-4 py-4 flex flex-col gap-2 flex-1 text-sm">
+                            {s.contact_person && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Contact</span><span className="font-semibold">{s.contact_person}</span></div>}
+                            {s.phone && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Phone</span><span>{s.phone}</span></div>}
+                            {s.email && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Email</span><span className="truncate">{s.email}</span></div>}
+                            {s.address && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Address</span><span className="text-xs">{s.address}</span></div>}
+                            {s.notes && <p className="text-xs text-gray-400 italic border-l-2 border-gray-100 pl-2 mt-1">{s.notes}</p>}
+                            {!s.contact_person && !s.phone && !s.email && !s.address && <p className="text-xs text-gray-300 italic">No contact info saved</p>}
+                            <div className="flex-1" />
+                            <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
+                              <button onClick={() => openEditSupplier(s)} className="text-xs font-bold px-3 py-1.5 rounded-sm" style={{ backgroundColor: '#1a2340', color: 'white' }}>Edit</button>
+                              <button onClick={() => { setShowNewPO(true); setPOSupplierId(s.id); setActiveTab('orders') }} className="text-xs font-bold px-3 py-1.5 rounded-sm border border-gray-200 text-gray-600 hover:bg-gray-50">+ New PO</button>
+                              <button onClick={() => handleArchiveSupplier(s)} className="text-xs font-bold px-3 py-1.5 rounded-sm text-white ml-auto" style={{ backgroundColor: '#9CA3AF' }}>Archive</button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )
+              ) : (
+                archivedSuppliers.length === 0 ? (
+                  <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                    <div className="text-5xl mb-3">🗄️</div>
+                    <p className="text-lg font-bold text-gray-600">No archived suppliers</p>
+                    <p className="text-sm text-gray-400 mt-1">Suppliers you archive will show up here and can be restored anytime</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {archivedSuppliers.map(s => {
+                      const poCount = orders.filter(o => o.supplier_id === s.id).length
+                      return (
+                        <div key={s.id} className="bg-white rounded-sm overflow-hidden flex flex-col" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
+                          <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#6B7280' }}>
+                            <p className="text-white font-black text-sm truncate">{s.name}</p>
+                            <span className="text-white text-xs opacity-50 shrink-0 ml-2">{poCount} PO{poCount !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div className="px-4 py-4 flex flex-col gap-2 flex-1 text-sm">
+                            {s.contact_person && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Contact</span><span className="font-semibold">{s.contact_person}</span></div>}
+                            {s.phone && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Phone</span><span>{s.phone}</span></div>}
+                            {s.email && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Email</span><span className="truncate">{s.email}</span></div>}
+                            {s.address && <div className="flex items-center gap-2 text-gray-600"><span className="text-gray-400 text-xs w-16 shrink-0">Address</span><span className="text-xs">{s.address}</span></div>}
+                            <p className="text-xs text-gray-400">
+                              Archived {s.archived_at ? new Date(s.archived_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                            </p>
+                            <div className="flex-1" />
+                            <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
+                              <button onClick={() => handleRestoreSupplier(s)} className="text-xs font-bold px-3 py-1.5 rounded-sm text-white bg-green-600 hover:bg-green-700 transition-colors">Restore</button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
               )}
             </>
           )}
