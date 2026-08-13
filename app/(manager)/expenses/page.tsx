@@ -465,7 +465,7 @@ export default function ExpensesPage() {
                     <button onClick={() => setShowAddCategoryModal(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Category</button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div data-cy="active-categories-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {categories.map(cat => {
                       const expCount = expenses.filter(e => e.category_id === cat.id).length
                       const total = expenses.filter(e => e.category_id === cat.id).reduce((sum, e) => sum + Number(e.amount), 0)
