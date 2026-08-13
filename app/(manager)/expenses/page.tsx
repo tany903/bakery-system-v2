@@ -150,7 +150,7 @@ export default function ExpensesPage() {
     if (!deletingExpense) return
     try {
       setSubmitting(true)
-      await deleteExpense(deletingExpense.id)
+      await deleteExpense(deletingExpense.id, currentUserId)
       setShowDeleteModal(false); setDeletingExpense(null)
       setSuccess('Expense deleted'); await loadData()
       setTimeout(() => setSuccess(''), 3000)

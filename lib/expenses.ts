@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Expense, ExpenseCategory } from './supabase'
+import { logExpenseEvent } from './expense-logs'
 
 export interface ExpenseWithCategory extends Expense {
   expense_categories?: ExpenseCategory
@@ -143,6 +144,18 @@ export async function createExpense(
     .single()
 
   if (error) throw error
+
+  logExpenseEvent({
+    expenseId: data.id,
+    action: 'created',
+    performedBy: recordedBy,
+    expenseName: title,
+    amount,
+    expenseDate,
+    categoryId: categoryId || null,
+    notes: notes || null,
+  })
+
   return data
 }
 
@@ -174,13 +187,45 @@ export async function updateExpense(
   return data
 }
 
-export async function deleteExpense(id: string): Promise<void> {
+export async function deleteExpense(id: string, performedBy: string): Promise<void> {
+  // Snapshot before delete — the row (and its detail) is about to disappear,
+  // and that snapshot is the whole point of the log.
+  let snapshot: {
+    name: string
+    amount: number
+    expense_date: string
+    category_id: string | null
+    notes: string | null
+  } = { name: 'Unknown', amount: 0, expense_date: '', category_id: null, notes: null }
+
+  try {
+    const { data } = await supabase
+      .from('expenses')
+      .select('name, amount, expense_date, category_id, notes')
+      .eq('id', id)
+      .single()
+    if (data) snapshot = data
+  } catch {
+    // Fall back to the placeholder snapshot above rather than blocking the delete.
+  }
+
   const { error } = await supabase
     .from('expenses')
     .delete()
     .eq('id', id)
 
   if (error) throw error
+
+  logExpenseEvent({
+    expenseId: id,
+    action: 'deleted',
+    performedBy,
+    expenseName: snapshot.name,
+    amount: Number(snapshot.amount),
+    expenseDate: snapshot.expense_date,
+    categoryId: snapshot.category_id,
+    notes: snapshot.notes,
+  })
 }
 
 // =============================================

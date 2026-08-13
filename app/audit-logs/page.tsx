@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import { getAllProducts } from '@/lib/products'
 import { getAllAuthLogs, type AuthLogEntry } from '@/lib/auth-logs'
+import { getAllExpenseLogs, type ExpenseLogEntry } from '@/lib/expense-logs'
+import { getAllExpenseCategories } from '@/lib/expenses'
+import type { ExpenseCategory } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import ManagerSidebar from '@/components/ManagerSidebar'
 
@@ -24,7 +27,7 @@ interface Transaction {
 export default function AuditLogsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'inventory' | 'activity'>('inventory')
+  const [activeTab, setActiveTab] = useState<'inventory' | 'activity' | 'expense'>('inventory')
 
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [filtered, setFiltered] = useState<Transaction[]>([])
@@ -41,6 +44,16 @@ export default function AuditLogsPage() {
   const [activityUserFilter, setActivityUserFilter] = useState('all')
   const [activityPage, setActivityPage] = useState(1)
 
+  // Expense activity state
+  const [expenseLogs, setExpenseLogs] = useState<ExpenseLogEntry[]>([])
+  const [filteredExpenseLogs, setFilteredExpenseLogs] = useState<ExpenseLogEntry[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
+  const [expenseActionFilter, setExpenseActionFilter] = useState('all')
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all')
+  const [expenseDateFrom, setExpenseDateFrom] = useState('')
+  const [expenseDateTo, setExpenseDateTo] = useState('')
+  const [expensePage, setExpensePage] = useState(1)
+
   // Filters (inventory tab)
   const [filterLocation, setFilterLocation] = useState('all')
   const [filterType, setFilterType] = useState('all')
@@ -52,6 +65,7 @@ export default function AuditLogsPage() {
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { applyFilters() }, [transactions, filterLocation, filterType, filterProduct, filterCategory, filterDateFrom, filterDateTo])
   useEffect(() => { applyActivityFilters() }, [authLogs, activityActionFilter, activityUserFilter])
+  useEffect(() => { applyExpenseFilters() }, [expenseLogs, expenseActionFilter, expenseCategoryFilter, expenseDateFrom, expenseDateTo])
 
   async function checkAuth() {
     const user = await getCurrentUser()
@@ -85,6 +99,12 @@ export default function AuditLogsPage() {
 
       const authLogsData = await getAllAuthLogs()
       setAuthLogs(authLogsData)
+
+      const expenseLogsData = await getAllExpenseLogs()
+      setExpenseLogs(expenseLogsData)
+
+      const expenseCategoriesData = await getAllExpenseCategories()
+      setExpenseCategories(expenseCategoriesData)
     } catch (err: any) {
       setError('Failed to load audit logs')
     }
@@ -130,6 +150,26 @@ export default function AuditLogsPage() {
     setFilteredAuthLogs(result)
   }
 
+  function applyExpenseFilters() {
+    setExpensePage(1)
+    let result = expenseLogs
+    if (expenseActionFilter !== 'all') {
+      result = result.filter(l => l.action === expenseActionFilter)
+    }
+    if (expenseCategoryFilter !== 'all') {
+      result = result.filter(l => l.category_id === expenseCategoryFilter)
+    }
+    if (expenseDateFrom) {
+      result = result.filter(l => new Date(l.created_at) >= new Date(expenseDateFrom))
+    }
+    if (expenseDateTo) {
+      const to = new Date(expenseDateTo)
+      to.setHours(23, 59, 59, 999)
+      result = result.filter(l => new Date(l.created_at) <= to)
+    }
+    setFilteredExpenseLogs(result)
+  }
+
   function clearFilters() {
     setFilterLocation('all')
     setFilterType('all')
@@ -151,6 +191,10 @@ export default function AuditLogsPage() {
   // Pagination — activity
   const activityTotalPages = Math.ceil(filteredAuthLogs.length / itemsPerPage)
   const paginatedActivity = filteredAuthLogs.slice((activityPage - 1) * itemsPerPage, activityPage * itemsPerPage)
+
+  // Pagination — expense activity
+  const expenseTotalPages = Math.ceil(filteredExpenseLogs.length / itemsPerPage)
+  const paginatedExpenseLogs = filteredExpenseLogs.slice((expensePage - 1) * itemsPerPage, expensePage * itemsPerPage)
 
   // Unique users who appear in the activity log, for the filter dropdown
   const activityUsers = Array.from(
@@ -189,6 +233,16 @@ export default function AuditLogsPage() {
     return (
       <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize"
         style={{ backgroundColor: action === 'login' ? '#10B981' : '#6B7280' }}>
+        {action}
+      </span>
+    )
+  }
+
+  function getExpenseActionBadge(action: string) {
+    const map: Record<string, string> = { created: '#10B981', deleted: '#EF4444', updated: '#3B82F6' }
+    return (
+      <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize"
+        style={{ backgroundColor: map[action] || '#6B7280' }}>
         {action}
       </span>
     )
@@ -248,7 +302,9 @@ export default function AuditLogsPage() {
               <p className="text-gray-700 font-medium mt-1">
                 {activeTab === 'inventory'
                   ? `${filtered.length} record${filtered.length !== 1 ? 's' : ''} found`
-                  : `${filteredAuthLogs.length} record${filteredAuthLogs.length !== 1 ? 's' : ''} found`}
+                  : activeTab === 'activity'
+                  ? `${filteredAuthLogs.length} record${filteredAuthLogs.length !== 1 ? 's' : ''} found`
+                  : `${filteredExpenseLogs.length} record${filteredExpenseLogs.length !== 1 ? 's' : ''} found`}
               </p>
             </div>
             {activeTab === 'inventory' && (
@@ -279,6 +335,13 @@ export default function AuditLogsPage() {
                 ? { backgroundColor: '#1a2340', color: 'white' }
                 : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
               Account Activity
+            </button>
+            <button onClick={() => setActiveTab('expense')}
+              className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+              style={activeTab === 'expense'
+                ? { backgroundColor: '#1a2340', color: 'white' }
+                : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              Expense Activity
             </button>
           </div>
 
@@ -528,6 +591,135 @@ export default function AuditLogsPage() {
                         <button
                           onClick={() => setActivityPage(p => Math.min(activityTotalPages, p + 1))}
                           disabled={activityPage === activityTotalPages}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── EXPENSE ACTIVITY TAB ── */}
+          {activeTab === 'expense' && (
+            <>
+              {/* FILTERS */}
+              <div className="bg-white rounded-sm p-4 mb-5 grid grid-cols-2 lg:grid-cols-4 gap-3 text-gray-900" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Action</label>
+                  <select value={expenseActionFilter} onChange={e => setExpenseActionFilter(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Actions</option>
+                    <option value="created">Created</option>
+                    <option value="deleted">Deleted</option>
+                    <option value="updated">Updated</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">Category</label>
+                  <select value={expenseCategoryFilter} onChange={e => setExpenseCategoryFilter(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
+                    <option value="all">All Categories</option>
+                    {expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">From</label>
+                  <input type="date" value={expenseDateFrom} onChange={e => setExpenseDateFrom(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1 block">To</label>
+                  <input type="date" value={expenseDateTo} onChange={e => setExpenseDateTo(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none" />
+                </div>
+              </div>
+
+              {/* TABLE */}
+              {filteredExpenseLogs.length === 0 ? (
+                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="text-5xl mb-3">💸</div>
+                  <p className="text-lg font-bold text-gray-600">No expense activity found</p>
+                  <p className="text-sm text-gray-400 mt-1">Activity will appear here as expenses are added or deleted</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                    <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
+                    <h2 className="font-bold text-white">Expense Activity History</h2>
+                    <span className="ml-auto text-xs text-white opacity-60">{filteredExpenseLogs.length} records</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="px-5 py-3 font-semibold">Date & Time</th>
+                          <th className="px-5 py-3 font-semibold">Expense</th>
+                          <th className="px-5 py-3 font-semibold">Amount</th>
+                          <th className="px-5 py-3 font-semibold">Category</th>
+                          <th className="px-5 py-3 font-semibold">Action</th>
+                          <th className="px-5 py-3 font-semibold">By</th>
+                          <th className="px-5 py-3 font-semibold">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedExpenseLogs.map((log) => (
+                          <tr key={log.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}
+                            </td>
+                            <td className="px-5 py-3 text-sm font-semibold text-gray-800 whitespace-nowrap">{log.expense_name || '—'}</td>
+                            <td className="px-5 py-3 text-sm font-black text-gray-900 whitespace-nowrap">
+                              {log.amount != null ? `₱${Number(log.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                            <td className="px-5 py-3 text-xs text-gray-500">{expenseCategories.find(c => c.id === log.category_id)?.name || '—'}</td>
+                            <td className="px-5 py-3">{getExpenseActionBadge(log.action)}</td>
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">{log.profiles?.full_name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-400 max-w-xs truncate">{log.notes || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* PAGINATION */}
+                  {expenseTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Page {expensePage} of {expenseTotalPages} — {filteredExpenseLogs.length} total records
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setExpensePage(p => Math.max(1, p - 1))}
+                          disabled={expensePage === 1}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+                          style={{ backgroundColor: '#1a2340', color: 'white' }}
+                        >
+                          ← Prev
+                        </button>
+                        {Array.from({ length: expenseTotalPages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === expenseTotalPages || Math.abs(p - expensePage) <= 1)
+                          .map((p, idx, arr) => (
+                            <span key={p} className="flex items-center gap-2">
+                              {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                <span className="text-xs text-gray-400">...</span>
+                              )}
+                              <button
+                                onClick={() => setExpensePage(p)}
+                                className="px-3 py-1.5 rounded-sm text-xs font-bold"
+                                style={expensePage === p
+                                  ? { backgroundColor: '#1a2340', color: 'white' }
+                                  : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
+                                }
+                              >
+                                {p}
+                              </button>
+                            </span>
+                          ))
+                        }
+                        <button
+                          onClick={() => setExpensePage(p => Math.min(expenseTotalPages, p + 1))}
+                          disabled={expensePage === expenseTotalPages}
                           className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
                           style={{ backgroundColor: '#1a2340', color: 'white' }}
                         >
