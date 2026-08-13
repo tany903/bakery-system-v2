@@ -7,6 +7,8 @@ import {
   getAllExpenses,
   getArchivedExpenses,
   getAllExpenseCategories,
+  getArchivedExpenseCategories,
+  restoreExpenseCategory,
   createExpense,
   updateExpense,
   archiveExpense,
@@ -80,6 +82,10 @@ export default function ExpensesPage() {
   const [showArchiveCategoryModal, setShowArchiveCategoryModal] = useState(false)
   const [archivingCategory, setArchivingCategory] = useState<ExpenseCategory | null>(null)
 
+  // Archived categories / active-archived sub-tab
+  const [archivedCategories, setArchivedCategories] = useState<ExpenseCategory[]>([])
+  const [categoryView, setCategoryView] = useState<'active' | 'archived'>('active')
+
   useEffect(() => { checkAuthAndLoad() }, [])
   useEffect(() => { if (!loading) loadSummary() }, [filterMonth, filterYear, loading])
 
@@ -97,14 +103,16 @@ export default function ExpensesPage() {
   async function loadData() {
     try {
       setLoading(true)
-      const [expensesData, archivedData, categoriesData] = await Promise.all([
+      const [expensesData, archivedData, categoriesData, archivedCategoriesData] = await Promise.all([
         getAllExpenses(),
         getArchivedExpenses(),
         getAllExpenseCategories(),
+        getArchivedExpenseCategories(),
       ])
       setExpenses(expensesData)
       setArchivedExpenses(archivedData)
       setCategories(categoriesData)
+      setArchivedCategories(archivedCategoriesData)
       await loadSummary()
     } catch { setError('Failed to load expenses') }
     finally { setLoading(false) }
@@ -146,7 +154,7 @@ export default function ExpensesPage() {
     if (!editingExpense || !editTitle.trim() || !editAmount) return
     try {
       setSubmitting(true); setError('')
-      await updateExpense(editingExpense.id, { title: editTitle.trim(), amount: parseFloat(editAmount), expense_date: editDate, category_id: editCategory || null, notes: editNotes.trim() || null }, currentUserId)      
+      await updateExpense(editingExpense.id, { title: editTitle.trim(), amount: parseFloat(editAmount), expense_date: editDate, category_id: editCategory || null, notes: editNotes.trim() || null }, currentUserId)
       setShowEditModal(false); setEditingExpense(null)
       setSuccess('Expense updated'); await loadData()
       setTimeout(() => setSuccess(''), 3000)
@@ -231,6 +239,16 @@ export default function ExpensesPage() {
       setSuccess('Category archived'); await loadData()
       setTimeout(() => setSuccess(''), 3000)
     } catch { setError('Failed to archive category.') }
+    finally { setSubmitting(false) }
+  }
+
+  async function handleRestoreCategory(cat: ExpenseCategory) {
+    try {
+      setSubmitting(true)
+      await restoreExpenseCategory(cat.id)
+      setSuccess('Category restored'); await loadData()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Failed to restore category.') }
     finally { setSubmitting(false) }
   }
 
@@ -421,50 +439,97 @@ export default function ExpensesPage() {
                   Add Category
                 </button>
               </div>
-              {categories.length === 0 ? (
-                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                  <div className="text-5xl mb-3">🏷️</div>
-                  <p className="text-lg font-bold text-gray-600">No categories yet</p>
-                  <button onClick={() => setShowAddCategoryModal(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Category</button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {categories.map(cat => {
-                    const expCount = expenses.filter(e => e.category_id === cat.id).length
-                    const total = expenses.filter(e => e.category_id === cat.id).reduce((sum, e) => sum + Number(e.amount), 0)
-                    return (
-                      <div key={cat.id} className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
-                        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#220901' }}>
-                          <p className="text-white font-black text-sm">{cat.name}</p>
-                          <div className="flex gap-1.5">
-                            <button onClick={() => handleEditCategoryClick(cat)}
-                              className="text-xs font-bold px-2.5 py-1 rounded-sm transition-colors"
-                              style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white' }}>
-                              Edit
-                            </button>
-                            <button onClick={() => handleArchiveCategoryClick(cat)}
-                              className="text-xs font-bold px-2.5 py-1 rounded-sm bg-gray-500 text-white hover:bg-gray-600 transition-colors">
-                              Archive
-                            </button>
+
+              <div className="flex gap-2 mb-4">
+                <button onClick={() => setCategoryView('active')}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                  style={categoryView === 'active'
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                  Active
+                </button>
+                <button onClick={() => setCategoryView('archived')}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                  style={categoryView === 'archived'
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                  Archived ({archivedCategories.length})
+                </button>
+              </div>
+
+              {categoryView === 'active' ? (
+                categories.length === 0 ? (
+                  <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                    <div className="text-5xl mb-3">🏷️</div>
+                    <p className="text-lg font-bold text-gray-600">No categories yet</p>
+                    <button onClick={() => setShowAddCategoryModal(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Category</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {categories.map(cat => {
+                      const expCount = expenses.filter(e => e.category_id === cat.id).length
+                      const total = expenses.filter(e => e.category_id === cat.id).reduce((sum, e) => sum + Number(e.amount), 0)
+                      return (
+                        <div key={cat.id} className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
+                          <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#220901' }}>
+                            <p className="text-white font-black text-sm">{cat.name}</p>
+                            <div className="flex gap-1.5">
+                              <button onClick={() => handleEditCategoryClick(cat)}
+                                className="text-xs font-bold px-2.5 py-1 rounded-sm transition-colors"
+                                style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white' }}>
+                                Edit
+                              </button>
+                              <button onClick={() => handleArchiveCategoryClick(cat)}
+                                className="text-xs font-bold px-2.5 py-1 rounded-sm bg-gray-500 text-white hover:bg-gray-600 transition-colors">
+                                Archive
+                              </button>
+                            </div>
                           </div>
+                          <div className="px-4 py-4">
+                            {cat.description && <p className="text-xs text-gray-500 mb-3">{cat.description}</p>}
+                            <div className="flex justify-between">
+                              <div>
+                                <p className="text-xs text-gray-400">Records</p>
+                                <p className="text-xl font-black text-gray-800">{expCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-gray-400">Total Spent</p>
+                                <p className="text-sm font-black text-red-500">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              ) : (
+                archivedCategories.length === 0 ? (
+                  <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                    <div className="text-5xl mb-3">🗄️</div>
+                    <p className="text-lg font-bold text-gray-600">No archived categories</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {archivedCategories.map(cat => (
+                      <div key={cat.id} className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
+                        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#6B7280' }}>
+                          <p className="text-white font-black text-sm">{cat.name}</p>
+                          <button onClick={() => handleRestoreCategory(cat)}
+                            className="text-xs font-bold px-2.5 py-1 rounded-sm bg-green-600 text-white hover:bg-green-700 transition-colors">
+                            Restore
+                          </button>
                         </div>
                         <div className="px-4 py-4">
-                          {cat.description && <p className="text-xs text-gray-500 mb-3">{cat.description}</p>}
-                          <div className="flex justify-between">
-                            <div>
-                              <p className="text-xs text-gray-400">Records</p>
-                              <p className="text-xl font-black text-gray-800">{expCount}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-gray-400">Total Spent</p>
-                              <p className="text-sm font-black text-red-500">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-                            </div>
-                          </div>
+                          {cat.description && <p className="text-xs text-gray-500 mb-1">{cat.description}</p>}
+                          <p className="text-xs text-gray-400">
+                            Archived {cat.archived_at ? new Date(cat.archived_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                          </p>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}

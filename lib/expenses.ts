@@ -69,6 +69,26 @@ export async function archiveExpenseCategory(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function getArchivedExpenseCategories(): Promise<ExpenseCategory[]> {
+  const { data, error } = await supabase
+    .from('expense_categories')
+    .select('*')
+    .eq('is_archived', true)
+    .order('archived_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function restoreExpenseCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('expense_categories')
+    .update({ is_archived: false, archived_at: null })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 // Keep for backwards compatibility but prefer archiveExpenseCategory
 export async function deleteExpenseCategory(id: string): Promise<void> {
   const { error } = await supabase
