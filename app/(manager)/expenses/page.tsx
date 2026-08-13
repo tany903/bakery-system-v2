@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import {
   getAllExpenses,
+  getArchivedExpenses,
   getAllExpenseCategories,
   createExpense,
   updateExpense,
-  deleteExpense,
+  archiveExpense,
+  restoreExpense,
   createExpenseCategory,
   updateExpenseCategory,
   archiveExpenseCategory,
@@ -24,6 +26,7 @@ export default function ExpensesPage() {
   const router = useRouter()
 
   const [expenses, setExpenses] = useState<ExpenseWithCategory[]>([])
+  const [archivedExpenses, setArchivedExpenses] = useState<ExpenseWithCategory[]>([])
   const [categories, setCategories] = useState<ExpenseCategory[]>([])
   const [summary, setSummary] = useState<ExpenseSummary | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string>('')
@@ -31,7 +34,7 @@ export default function ExpensesPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [activeTab, setActiveTab] = useState<'expenses' | 'categories'>('expenses')
+  const [activeTab, setActiveTab] = useState<'expenses' | 'categories' | 'archived'>('expenses')
 
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
@@ -54,9 +57,13 @@ export default function ExpensesPage() {
   const [editCategory, setEditCategory] = useState('')
   const [editNotes, setEditNotes] = useState('')
 
-  // Delete expense
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [deletingExpense, setDeletingExpense] = useState<ExpenseWithCategory | null>(null)
+  // Archive expense
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [archivingExpense, setArchivingExpense] = useState<ExpenseWithCategory | null>(null)
+
+  // Restore expense
+  const [showRestoreModal, setShowRestoreModal] = useState(false)
+  const [restoringExpense, setRestoringExpense] = useState<ExpenseWithCategory | null>(null)
 
   // Add category
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false)
@@ -90,8 +97,13 @@ export default function ExpensesPage() {
   async function loadData() {
     try {
       setLoading(true)
-      const [expensesData, categoriesData] = await Promise.all([getAllExpenses(), getAllExpenseCategories()])
+      const [expensesData, archivedData, categoriesData] = await Promise.all([
+        getAllExpenses(),
+        getArchivedExpenses(),
+        getAllExpenseCategories(),
+      ])
       setExpenses(expensesData)
+      setArchivedExpenses(archivedData)
       setCategories(categoriesData)
       await loadSummary()
     } catch { setError('Failed to load expenses') }
@@ -142,19 +154,35 @@ export default function ExpensesPage() {
     finally { setSubmitting(false) }
   }
 
-  function handleDeleteClick(expense: ExpenseWithCategory) {
-    setDeletingExpense(expense); setShowDeleteModal(true)
+  function handleArchiveClick(expense: ExpenseWithCategory) {
+    setArchivingExpense(expense); setShowArchiveModal(true)
   }
 
-  async function handleConfirmDelete() {
-    if (!deletingExpense) return
+  async function handleConfirmArchive() {
+    if (!archivingExpense) return
     try {
       setSubmitting(true)
-      await deleteExpense(deletingExpense.id, currentUserId)
-      setShowDeleteModal(false); setDeletingExpense(null)
-      setSuccess('Expense deleted'); await loadData()
+      await archiveExpense(archivingExpense.id, currentUserId)
+      setShowArchiveModal(false); setArchivingExpense(null)
+      setSuccess('Expense archived'); await loadData()
       setTimeout(() => setSuccess(''), 3000)
-    } catch { setError('Failed to delete expense.') }
+    } catch { setError('Failed to archive expense.') }
+    finally { setSubmitting(false) }
+  }
+
+  function handleRestoreClick(expense: ExpenseWithCategory) {
+    setRestoringExpense(expense); setShowRestoreModal(true)
+  }
+
+  async function handleConfirmRestore() {
+    if (!restoringExpense) return
+    try {
+      setSubmitting(true)
+      await restoreExpense(restoringExpense.id, currentUserId)
+      setShowRestoreModal(false); setRestoringExpense(null)
+      setSuccess('Expense restored'); await loadData()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch { setError('Failed to restore expense.') }
     finally { setSubmitting(false) }
   }
 
@@ -336,14 +364,14 @@ export default function ExpensesPage() {
           )}
 
           <div className="flex gap-2 mb-5">
-            {(['expenses', 'categories'] as const).map(tab => (
+            {(['expenses', 'categories', 'archived'] as const).map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)}
                 className="px-4 py-1.5 rounded-sm text-xs font-bold transition-colors capitalize"
                 style={activeTab === tab
                   ? { backgroundColor: '#1a2340', color: 'white' }
                   : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }
                 }>
-                {tab === 'expenses' ? 'Expense Records' : 'Categories'}
+                {tab === 'expenses' ? 'Expense Records' : tab === 'categories' ? 'Categories' : `Archived Expenses (${archivedExpenses.length})`}
               </button>
             ))}
           </div>
@@ -375,7 +403,7 @@ export default function ExpensesPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filteredExpenses.map(expense => (
-                    <ExpenseCard key={expense.id} expense={expense} onEdit={handleEditClick} onDelete={handleDeleteClick} />
+                    <ExpenseCard key={expense.id} expense={expense} onEdit={handleEditClick} onDelete={handleArchiveClick} />
                   ))}
                 </div>
               )}
@@ -440,6 +468,61 @@ export default function ExpensesPage() {
               )}
             </div>
           )}
+
+          {activeTab === 'archived' && (
+            <div>
+              {archivedExpenses.length === 0 ? (
+                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="text-5xl mb-3">🗄️</div>
+                  <p className="text-lg font-bold text-gray-600">No archived expenses</p>
+                  <p className="text-sm text-gray-400 mt-1">Expenses you archive will show up here and can be restored anytime</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                    <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
+                    <h2 className="font-bold text-white">Archived Expenses</h2>
+                    <span className="ml-auto text-xs text-white opacity-60">{archivedExpenses.length} records</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="px-5 py-3 font-semibold">Expense</th>
+                          <th className="px-5 py-3 font-semibold">Amount</th>
+                          <th className="px-5 py-3 font-semibold">Date</th>
+                          <th className="px-5 py-3 font-semibold">Category</th>
+                          <th className="px-5 py-3 font-semibold">Archived</th>
+                          <th className="px-5 py-3 font-semibold">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {archivedExpenses.map((expense: any) => (
+                          <tr key={expense.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 text-sm font-semibold text-gray-800">{expense.name}</td>
+                            <td className="px-5 py-3 text-sm font-black text-gray-900">₱{Number(expense.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-5 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {new Date(expense.expense_date + 'T00:00:00Z').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })}
+                            </td>
+                            <td className="px-5 py-3 text-xs text-gray-500">{expense.expense_categories?.name || '—'}</td>
+                            <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
+                              {expense.archived_at ? new Date(expense.archived_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' }) : '—'}
+                            </td>
+                            <td className="px-5 py-3">
+                              <button onClick={() => handleRestoreClick(expense)}
+                                className="text-xs font-bold px-3 py-1.5 rounded-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                Restore
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -493,18 +576,34 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* DELETE EXPENSE */}
-      {showDeleteModal && deletingExpense && (
+      {/* ARCHIVE EXPENSE */}
+      {showArchiveModal && archivingExpense && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-sm p-6 max-w-sm w-full text-center" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
-            <div className="text-5xl mb-4">🗑️</div>
-            <h2 className="text-lg font-black text-gray-900 mb-2">Delete Expense?</h2>
-            <p className="text-sm text-gray-500 mb-1">Are you sure you want to delete <strong>{deletingExpense.name}</strong>?</p>
-            <p className="text-red-500 font-black mb-1">₱{Number(deletingExpense.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-            <p className="text-xs text-gray-400 mb-5">This cannot be undone.</p>
+            <div className="text-5xl mb-4">🗄️</div>
+            <h2 className="text-lg font-black text-gray-900 mb-2">Archive Expense?</h2>
+            <p className="text-sm text-gray-500 mb-1">Are you sure you want to archive <strong>{archivingExpense.name}</strong>?</p>
+            <p className="text-red-500 font-black mb-1">₱{Number(archivingExpense.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+            <p className="text-xs text-gray-400 mb-5">It will be removed from totals and hidden from the list, but you can restore it anytime from the Archived Expenses tab.</p>
             <div className="flex gap-3">
-              <button onClick={handleConfirmDelete} disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 text-sm">{submitting ? 'Deleting...' : 'Yes, Delete'}</button>
-              <button onClick={() => { setShowDeleteModal(false); setDeletingExpense(null) }} className="flex-1 py-2 rounded-sm border border-gray-300 font-semibold text-sm hover:bg-gray-100 text-gray-900">Cancel</button>
+              <button onClick={handleConfirmArchive} disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white bg-gray-500 hover:bg-gray-600 disabled:opacity-50 text-sm">{submitting ? 'Archiving...' : 'Yes, Archive'}</button>
+              <button onClick={() => { setShowArchiveModal(false); setArchivingExpense(null) }} className="flex-1 py-2 rounded-sm border border-gray-300 font-semibold text-sm hover:bg-gray-100 text-gray-900">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESTORE EXPENSE */}
+      {showRestoreModal && restoringExpense && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-sm p-6 max-w-sm w-full text-center" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
+            <div className="text-5xl mb-4">♻️</div>
+            <h2 className="text-lg font-black text-gray-900 mb-2">Restore Expense?</h2>
+            <p className="text-sm text-gray-500 mb-1">Restore <strong>{restoringExpense.name}</strong> back to your active expense list?</p>
+            <p className="text-xs text-gray-400 mb-5">It will count toward totals again for its original month.</p>
+            <div className="flex gap-3">
+              <button onClick={handleConfirmRestore} disabled={submitting} className="flex-1 py-2 rounded-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 text-sm">{submitting ? 'Restoring...' : 'Yes, Restore'}</button>
+              <button onClick={() => { setShowRestoreModal(false); setRestoringExpense(null) }} className="flex-1 py-2 rounded-sm border border-gray-300 font-semibold text-sm hover:bg-gray-100 text-gray-900">Cancel</button>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 export interface ExpenseLogEntry {
   id: string
   expense_id: string | null
-  action: 'created' | 'deleted' | 'updated'
+  action: 'created' | 'archived' | 'restored' | 'updated'
   performed_by: string | null
   expense_name: string | null
   amount: number | null
@@ -16,7 +16,7 @@ export interface ExpenseLogEntry {
 
 interface LogExpenseEventParams {
   expenseId: string | null
-  action: 'created' | 'deleted' | 'updated'
+  action: 'created' | 'archived' | 'restored' | 'updated'
   performedBy: string
   expenseName: string
   amount: number
@@ -26,9 +26,9 @@ interface LogExpenseEventParams {
 }
 
 /**
- * Records an expense create/delete/update event. Mirrors auth-logs.ts's
- * pattern: failures are logged to console but never thrown — logging should
- * never block an actual expense save/delete.
+ * Records an expense create/archive/restore/update event. Mirrors
+ * auth-logs.ts's pattern: failures are logged to console but never thrown —
+ * logging should never block an actual expense save/archive/restore.
  */
 export async function logExpenseEvent(params: LogExpenseEventParams): Promise<void> {
   try {

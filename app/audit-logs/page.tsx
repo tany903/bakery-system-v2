@@ -239,7 +239,7 @@ export default function AuditLogsPage() {
   }
 
   function getExpenseActionBadge(action: string) {
-    const map: Record<string, string> = { created: '#10B981', deleted: '#EF4444', updated: '#3B82F6' }
+    const map: Record<string, string> = { created: '#10B981', archived: '#6B7280', restored: '#3B82F6', updated: '#F5A623' }
     return (
       <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white capitalize"
         style={{ backgroundColor: map[action] || '#6B7280' }}>
@@ -614,7 +614,8 @@ export default function AuditLogsPage() {
                   <select value={expenseActionFilter} onChange={e => setExpenseActionFilter(e.target.value)} className="w-full text-xs font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none">
                     <option value="all">All Actions</option>
                     <option value="created">Created</option>
-                    <option value="deleted">Deleted</option>
+                    <option value="archived">Archived</option>
+                    <option value="restored">Restored</option>
                     <option value="updated">Updated</option>
                   </select>
                 </div>
@@ -640,7 +641,7 @@ export default function AuditLogsPage() {
                 <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                   <div className="text-5xl mb-3">💸</div>
                   <p className="text-lg font-bold text-gray-600">No expense activity found</p>
-                  <p className="text-sm text-gray-400 mt-1">Activity will appear here as expenses are added or deleted</p>
+                  <p className="text-sm text-gray-400 mt-1">Activity will appear here as expenses are added, archived, or restored</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>

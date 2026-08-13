@@ -91,7 +91,23 @@ export async function getAllExpenses(): Promise<ExpenseWithCategory[]> {
       expense_categories (*),
       recorded_by_profile:profiles!expenses_recorded_by_fkey (full_name)
     `)
+    .eq('is_archived', false)
     .order('expense_date', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function getArchivedExpenses(): Promise<ExpenseWithCategory[]> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select(`
+      *,
+      expense_categories (*),
+      recorded_by_profile:profiles!expenses_recorded_by_fkey (full_name)
+    `)
+    .eq('is_archived', true)
+    .order('archived_at', { ascending: false })
 
   if (error) throw error
   return data || []
@@ -114,6 +130,7 @@ export async function getExpensesByDateRange(
       expense_categories (*),
       recorded_by_profile:profiles!expenses_recorded_by_fkey (full_name)
     `)
+    .eq('is_archived', false)
     .gte('expense_date', startDate)
     .lte('expense_date', endDate)
     .order('expense_date', { ascending: false })
@@ -187,44 +204,55 @@ export async function updateExpense(
   return data
 }
 
-export async function deleteExpense(id: string, performedBy: string): Promise<void> {
-  // Snapshot before delete — the row (and its detail) is about to disappear,
-  // and that snapshot is the whole point of the log.
-  let snapshot: {
-    name: string
-    amount: number
-    expense_date: string
-    category_id: string | null
-    notes: string | null
-  } = { name: 'Unknown', amount: 0, expense_date: '', category_id: null, notes: null }
-
-  try {
-    const { data } = await supabase
-      .from('expenses')
-      .select('name, amount, expense_date, category_id, notes')
-      .eq('id', id)
-      .single()
-    if (data) snapshot = data
-  } catch {
-    // Fall back to the placeholder snapshot above rather than blocking the delete.
-  }
-
-  const { error } = await supabase
+/**
+ * Archives an expense (soft delete). The row is kept — just flagged
+ * is_archived so it drops out of getAllExpenses()/summary totals and moves
+ * to the "Archived Expenses" view, where it can be restored.
+ */
+export async function archiveExpense(id: string, performedBy: string): Promise<void> {
+  const { data, error } = await supabase
     .from('expenses')
-    .delete()
+    .update({ is_archived: true, archived_at: new Date().toISOString() })
     .eq('id', id)
+    .select('name, amount, expense_date, category_id, notes')
+    .single()
 
   if (error) throw error
 
   logExpenseEvent({
     expenseId: id,
-    action: 'deleted',
+    action: 'archived',
     performedBy,
-    expenseName: snapshot.name,
-    amount: Number(snapshot.amount),
-    expenseDate: snapshot.expense_date,
-    categoryId: snapshot.category_id,
-    notes: snapshot.notes,
+    expenseName: data.name,
+    amount: Number(data.amount),
+    expenseDate: data.expense_date,
+    categoryId: data.category_id,
+    notes: data.notes,
+  })
+}
+
+/**
+ * Restores a previously archived expense back into the active list.
+ */
+export async function restoreExpense(id: string, performedBy: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .update({ is_archived: false, archived_at: null })
+    .eq('id', id)
+    .select('name, amount, expense_date, category_id, notes')
+    .single()
+
+  if (error) throw error
+
+  logExpenseEvent({
+    expenseId: id,
+    action: 'restored',
+    performedBy,
+    expenseName: data.name,
+    amount: Number(data.amount),
+    expenseDate: data.expense_date,
+    categoryId: data.category_id,
+    notes: data.notes,
   })
 }
 
@@ -250,6 +278,7 @@ export async function getMonthlyExpenseSummary(
   const { data: expenses, error: expenseError } = await supabase
     .from('expenses')
     .select(`*, expense_categories (name)`)
+    .eq('is_archived', false)
     .gte('expense_date', formatLocalDate(startDate))
     .lte('expense_date', formatLocalDate(endDate))
 
@@ -263,8 +292,8 @@ export async function getMonthlyExpenseSummary(
 
   if (salesError) throw salesError
 
-  const totalExpenses = (expenses || []).reduce((sum, e) => sum + Number(e.amount), 0)
-  const totalRevenue = (sales || []).reduce((sum, s) => sum + Number(s.total_amount), 0)
+  const totalExpenses = (expenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0)
+  const totalRevenue = (sales || []).reduce((sum: number, s: any) => sum + Number(s.total_amount), 0)
 
   const categoryMap: { [key: string]: number } = {}
   ;(expenses || []).forEach((e: any) => {
