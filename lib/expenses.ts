@@ -184,7 +184,8 @@ export async function updateExpense(
     expense_date?: string
     category_id?: string | null
     notes?: string | null
-  }
+  },
+  performedBy: string
 ): Promise<Expense> {
   const { data, error } = await supabase
     .from('expenses')
@@ -201,6 +202,18 @@ export async function updateExpense(
     .single()
 
   if (error) throw error
+
+  logExpenseEvent({
+    expenseId: id,
+    action: 'updated',
+    performedBy,
+    expenseName: data.name,
+    amount: Number(data.amount),
+    expenseDate: data.expense_date,
+    categoryId: data.category_id,
+    notes: data.notes,
+  })
+
   return data
 }
 

@@ -146,7 +146,7 @@ export default function ExpensesPage() {
     if (!editingExpense || !editTitle.trim() || !editAmount) return
     try {
       setSubmitting(true); setError('')
-      await updateExpense(editingExpense.id, { title: editTitle.trim(), amount: parseFloat(editAmount), expense_date: editDate, category_id: editCategory || null, notes: editNotes.trim() || null })
+      await updateExpense(editingExpense.id, { title: editTitle.trim(), amount: parseFloat(editAmount), expense_date: editDate, category_id: editCategory || null, notes: editNotes.trim() || null }, currentUserId)      
       setShowEditModal(false); setEditingExpense(null)
       setSuccess('Expense updated'); await loadData()
       setTimeout(() => setSuccess(''), 3000)
