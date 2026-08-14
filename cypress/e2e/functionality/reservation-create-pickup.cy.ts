@@ -1,4 +1,4 @@
-describe('Reservation pickup flow', () => {
+describe('[functionality test] Reservation Creation & Pickup Flow', () => {
   it('creates a reservation, then completes pickup and marks it Completed', () => {
     cy.loginAsCashier()
 
@@ -19,7 +19,14 @@ describe('Reservation pickup flow', () => {
 
     cy.contains('Complete Pickup').should('be.visible')
     cy.contains('button', '💵 Cash').click()
+
+    // the pickup flow does several sequential DB round-trips (sale insert,
+    // sale_items insert, a per-item stock update loop, then the reservation
+    // status update) — wait on the actual final request instead of guessing
+    // at a UI timeout, since that chain can legitimately take a while
+    cy.intercept('PATCH', '**/rest/v1/reservations*').as('completePickup')
     cy.contains('button', /^Confirm — Collect ₱/).click()
+    cy.wait('@completePickup', { timeout: 20000 })
 
     cy.contains('Pickup completed — sale recorded', { timeout: 10000 }).should('be.visible')
 

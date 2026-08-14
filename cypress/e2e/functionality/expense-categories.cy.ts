@@ -147,10 +147,10 @@ describe('[functionality test] Expense Categories', () => {
     cy.contains(expenseTitle, { timeout: 10000 }).should('be.visible')
 
     cy.contains('button', 'Categories').click()
-    // scoped to '.overflow-hidden' since the category card (not the "Expenses
-    // by Category" summary panel above the tabs) uses that class — the summary
-    // panel also matches the category name once an expense exists under it
-    cy.contains(name).parents('.overflow-hidden').first().within(() => {
+    // scoped to the active-categories grid container (rather than searching the
+    // whole page) since the "Expenses by Category" summary panel above the tabs
+    // also matches the category name once an expense exists under it
+    cy.get('[data-cy="active-categories-grid"]').contains(name).parents('.overflow-hidden').first().within(() => {
       cy.contains('button', 'Archive').click()
     })
     cy.get('.fixed.inset-0').within(() => {
@@ -162,4 +162,34 @@ describe('[functionality test] Expense Categories', () => {
       cy.contains(name).should('be.visible')
     })
   })
+
+  it('archives a category, then restores it from the Archived sub-tab', () => {
+  const name = `Restore Cat ${Date.now()}`
+
+  cy.contains('button', 'Add Category').click()
+  cy.get('.fixed.inset-0').within(() => {
+    cy.get('input[type="text"]').eq(0).type(name)
+    cy.contains('button', 'Add Category').click()
+  })
+  cy.contains(name, { timeout: 10000 }).should('be.visible')
+
+  cy.get('[data-cy="active-categories-grid"]').contains(name).parents('.overflow-hidden').first().within(() => {
+    cy.contains('button', 'Archive').click()
+  })
+  cy.get('.fixed.inset-0').within(() => {
+    cy.contains('button', 'Yes, Archive').click()
+  })
+  cy.get('[data-cy="active-categories-grid"]').should('not.contain', name)
+
+  cy.contains('button', /Archived \(\d+\)/).click()
+  cy.contains(name, { timeout: 10000 }).should('be.visible')
+  cy.contains(name).parents('.overflow-hidden').first().within(() => {
+    cy.contains('button', 'Restore').click()
+  })
+
+  cy.contains(name).should('not.exist')
+
+  cy.contains('button', 'Active').click()
+  cy.contains(name, { timeout: 10000 }).should('be.visible')
+})
 })
