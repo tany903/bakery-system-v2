@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const supabaseHost = "https://bnsfrotpjbfgkwjfydbk.supabase.co";
 const supabaseWs = "wss://bnsfrotpjbfgkwjfydbk.supabase.co";
+const productionOrigin = "https://bakery-system-v2.vercel.app";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -33,8 +34,31 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Sensitive/authenticated pages: never cache
-        source: "/(dashboard|pos|transactions|expenses|purchase-orders|reservations|inventory|products|ingredients|staff|audit-logs|analytics)/:path*",
+        // CORS: only /api/* needs it, scoped to our own origin — not the whole site
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: productionOrigin },
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
+        ],
+      },
+      {
+        // Never cache the login page
+        source: "/login",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+        ],
+      },
+      {
+        // Never cache the dashboard
+        source: "/dashboard/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+        ],
+      },
+      {
+        // Other authenticated/sensitive pages: same treatment as before
+        source: "/(pos|transactions|expenses|purchase-orders|reservations|inventory|products|ingredients|staff|audit-logs|analytics)/:path*",
         headers: [
           { key: "Cache-Control", value: "private, no-store, must-revalidate" },
         ],
