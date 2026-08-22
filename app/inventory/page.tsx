@@ -18,6 +18,7 @@ import { createDisposal, PULLOUT_REASONS, OTH_REASONS, type DisposalType } from 
 import { signOut } from '@/lib/auth'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
+import { LogoSmall, LogoWatermark } from '@/components/Logo'
 
 export default function InventoryPage() {
   const router = useRouter()
@@ -232,7 +233,7 @@ export default function InventoryPage() {
         <div className="flex items-center gap-3">
           <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
           <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
-            <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <LogoSmall />
           </div>
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
@@ -258,7 +259,7 @@ export default function InventoryPage() {
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
           <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
-            <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <LogoSmall />
           </div>
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
@@ -294,11 +295,11 @@ const productionNavLinks = [
   { href: '/reservations', label: 'Reservations' }
 ]
 
-  const Watermark = () => (
-    <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-      style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-  )
+  // const Watermark = () => (
+  //   <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
+  //     style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
+  //     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+  // )
 
   function DisposalModal() {
     const reasons = disposalType === 'pullout' ? PULLOUT_REASONS : OTH_REASONS
@@ -356,7 +357,7 @@ const productionNavLinks = [
       <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
         <CashierTopNav />
         <div className="flex flex-1 relative">
-          <Watermark />
+          <LogoWatermark />
           <div className="relative z-10 flex-1 p-6 overflow-y-auto">
             <h1 className="text-4xl font-black text-gray-900 mb-6">Shop Inventory</h1>
             {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error}</div>}
@@ -458,7 +459,7 @@ const productionNavLinks = [
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
             <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
-              <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+              <LogoSmall />
             </div>
             <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
           </div>
@@ -483,7 +484,7 @@ const productionNavLinks = [
           </div>
         </div>
         <div className="flex flex-1 relative">
-          <Watermark />
+          <LogoWatermark />
           <div className="relative z-10 flex-1 p-6 overflow-y-auto">
             <h1 className="text-4xl font-black text-gray-900 mb-6">Production Inventory</h1>
             {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error}</div>}
@@ -593,7 +594,7 @@ const productionNavLinks = [
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <TopNav />
       <div className="flex flex-1 relative">
-        <Watermark />
+        <LogoWatermark />
         <ManagerSidebar />
         <div className="relative z-10 flex-1 p-6 overflow-y-auto">
           <div className="flex items-center justify-between mb-6">

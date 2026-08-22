@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn, getUserProfile } from '@/lib/auth'
+import Image from 'next/image'
+import { LogoSmall, LogoWatermark } from '@/components/Logo'
 
 
 export default function LoginPage() {
@@ -43,7 +45,7 @@ export default function LoginPage() {
       <div className="w-full flex items-center px-8 py-4" style={{ backgroundColor: '#7B1111' }}>
         <div className="flex items-center gap-3">
           <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
-          <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+          <LogoSmall />
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
       </div>
@@ -51,15 +53,16 @@ export default function LoginPage() {
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 flex relative overflow-hidden">
 
-        {/* Left Side - Mascot Watermark */}
-        <div className="w-1/2 relative">
-          <img
-            src="/logo-big.png"
-            alt="Mascot"
-            className="absolute inset-0 w-full h-full object-cover object-left"
-            style={{ opacity: 0.3 }}
-          />
-        </div>
+{/* Left Side - Mascot Watermark */}
+<div className="w-1/2 relative">
+  <Image
+    src="/logo-big.png"
+    alt="Mascot"
+    fill
+    className="object-cover object-left"
+    style={{ opacity: 0.3 }}
+  />
+</div>
 
         {/* Right Side - Login Form */}
         <div className="w-1/2 flex flex-col justify-center px-16 py-12">

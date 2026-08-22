@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import ManagerSidebar from '@/components/ManagerSidebar'
+import { LogoSmall, LogoWatermark } from '@/components/Logo'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -447,7 +448,7 @@ export default function TransactionsPage() {
         <div className="flex items-center gap-3">
           <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
           <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center">
-            <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <LogoSmall />
           </div>
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
@@ -461,9 +462,7 @@ export default function TransactionsPage() {
       {/* BODY */}
       <div className="flex flex-1 relative">
 
-        <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-          style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        <LogoWatermark />
 
         <ManagerSidebar />
 

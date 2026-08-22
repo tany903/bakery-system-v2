@@ -16,6 +16,7 @@ import type { Product, Category } from '@/lib/supabase'
 import FulfillRequestModal from '@/components/FulfillRequestModal'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
+import { LogoSmall, LogoWatermark } from '@/components/Logo'
 
 const PAGE_SIZE = 9
 const DECLINE_REASONS = ['No stocks', 'Repeat order', 'Others']
@@ -331,16 +332,16 @@ export default function RestockRequestsPage() {
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
 
-  const Watermark = () => (
-    <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-      style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-  )
+  // const Watermark = () => (
+  //   <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
+  //     style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
+  //     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+  // )
   const Branding = () => (
     <div className="flex items-center gap-3 shrink-0">
       <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
       <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
-        <img src="/FREDS_ICON1.png" alt="Logo" className="w-10 h-10 object-contain" />
+        <LogoSmall />
       </div>
       <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
     </div>
@@ -820,7 +821,7 @@ export default function RestockRequestsPage() {
           </div>
           <div className="ml-auto"><LogoutButton /></div>
         </div>
-        <div className="flex flex-1 relative"><Watermark />{mainContent}</div>
+        <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {newRequestModal}
       </div>
     )
@@ -841,7 +842,7 @@ export default function RestockRequestsPage() {
           </div>
           <div className="ml-auto"><LogoutButton /></div>
         </div>
-        <div className="flex flex-1 relative"><Watermark />{mainContent}</div>
+        <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {fulfillModal}
         {declineModal}
       </div>
@@ -854,7 +855,7 @@ export default function RestockRequestsPage() {
         <Branding /><LogoutButton />
       </div>
       <div className="flex flex-1 relative">
-        <Watermark /><ManagerSidebar />{mainContent}
+        <LogoWatermark /><ManagerSidebar />{mainContent}
       </div>
       {newRequestModal}
       {fulfillModal}
