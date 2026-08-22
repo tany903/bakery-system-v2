@@ -87,7 +87,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="Username"
+              placeholder="Email"
               className="w-full px-5 py-4 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-600"
               style={{ backgroundColor: '#fff' }}
             />
