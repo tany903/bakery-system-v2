@@ -37,6 +37,30 @@ function formatPHT(isoStr: string, opts: Intl.DateTimeFormatOptions): string {
   return new Date(isoStr).toLocaleString('en-PH', { ...opts, timeZone: 'Asia/Manila' })
 }
 
+// Hoisted outside the page component so these aren't recreated as new
+// function references on every render.
+function Branding() {
+  return (
+    <div className="flex items-center gap-3 shrink-0">
+      <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
+      <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
+        <LogoSmall />
+      </div>
+      <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
+    </div>
+  )
+}
+
+function LogoutButton({ onLogout }: { onLogout: () => void }) {
+  return (
+    <button onClick={onLogout}
+      className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
+      <span className="text-base font-bold">→</span>
+      <span className="text-xs font-semibold">Logout</span>
+    </button>
+  )
+}
+
 export default function RestockRequestsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -119,10 +143,11 @@ export default function RestockRequestsPage() {
     } catch { setError('Failed to load products') }
   }
 
-  function filterRequests() {
+  // Everything except the status filter — reused for both the filtered
+  // list and the status-tab counts, so switching type/date/category/search
+  // updates the tab counts too, not just the currently active tab's list.
+  function getBaseFiltered() {
     let result = requests
-    if (statusFilter === 'pending') result = result.filter(r => r.status === 'requested')
-    else if (statusFilter !== 'all') result = result.filter(r => r.status === statusFilter)
     if (typeFilter !== 'all') result = result.filter(r => (r as any).request_type === typeFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -149,6 +174,16 @@ export default function RestockRequestsPage() {
         result = result.filter(r => new Date(r.created_at) <= end)
       }
     }
+    return result
+  }
+
+  function filterRequests() {
+    const base = getBaseFiltered()
+    const result = statusFilter === 'pending'
+      ? base.filter(r => r.status === 'requested')
+      : statusFilter === 'all'
+        ? base
+        : base.filter(r => r.status === statusFilter)
     setFilteredRequests(result)
   }
 
@@ -252,7 +287,12 @@ export default function RestockRequestsPage() {
   }
 
   const handleLogout = async () => { await signOut(); router.push('/login') }
-  const pendingCount = requests.filter(r => r.status === 'requested').length
+
+  // Base-filtered set (everything except status) drives both the subtitle
+  // count and every status tab's count, so they stay in sync with type/
+  // date/category/search filters instead of only reflecting raw `requests`.
+  const baseFiltered = getBaseFiltered()
+  const pendingCount = baseFiltered.filter(r => r.status === 'requested').length
   const totalPages = Math.ceil(filteredRequests.length / PAGE_SIZE)
   const paginatedRequests = filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -304,11 +344,11 @@ export default function RestockRequestsPage() {
     { href: '/reservations', label: 'Reservations' }
   ]
   const statusTabs = [
-    { key: 'all', label: 'All', count: requests.length },
-    { key: 'pending', label: 'Pending', count: requests.filter(r => r.status === 'requested').length },
-    { key: 'fulfilled', label: 'Fulfilled', count: requests.filter(r => r.status === 'fulfilled').length },
-    { key: 'partially_fulfilled', label: 'Partial', count: requests.filter(r => r.status === 'partially_fulfilled').length },
-    { key: 'declined', label: 'Declined', count: requests.filter(r => r.status === 'declined').length },
+    { key: 'all', label: 'All', count: baseFiltered.length },
+    { key: 'pending', label: 'Pending', count: baseFiltered.filter(r => r.status === 'requested').length },
+    { key: 'fulfilled', label: 'Fulfilled', count: baseFiltered.filter(r => r.status === 'fulfilled').length },
+    { key: 'partially_fulfilled', label: 'Partial', count: baseFiltered.filter(r => r.status === 'partially_fulfilled').length },
+    { key: 'declined', label: 'Declined', count: baseFiltered.filter(r => r.status === 'declined').length },
   ]
   const dateTabs = [
     { key: 'all', label: 'All Time' },
@@ -331,28 +371,6 @@ export default function RestockRequestsPage() {
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
-
-  // const Watermark = () => (
-  //   <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-  //     style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-  //     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-  // )
-  const Branding = () => (
-    <div className="flex items-center gap-3 shrink-0">
-      <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
-      <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
-        <LogoSmall />
-      </div>
-      <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
-    </div>
-  )
-  const LogoutButton = () => (
-    <button onClick={handleLogout}
-      className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-      <span className="text-base font-bold">→</span>
-      <span className="text-xs font-semibold">Logout</span>
-    </button>
-  )
 
   const cards = (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -819,7 +837,7 @@ export default function RestockRequestsPage() {
               </a>
             ))}
           </div>
-          <div className="ml-auto"><LogoutButton /></div>
+          <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>
         </div>
         <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {newRequestModal}
@@ -840,7 +858,7 @@ export default function RestockRequestsPage() {
               </a>
             ))}
           </div>
-          <div className="ml-auto"><LogoutButton /></div>
+          <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>
         </div>
         <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {fulfillModal}
@@ -852,7 +870,7 @@ export default function RestockRequestsPage() {
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
-        <Branding /><LogoutButton />
+        <Branding /><LogoutButton onLogout={handleLogout} />
       </div>
       <div className="flex flex-1 relative">
         <LogoWatermark /><ManagerSidebar />{mainContent}
