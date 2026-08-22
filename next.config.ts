@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // applies to EVERY route — overrides Vercel's platform default of "*"
         source: "/:path*",
         headers: [
           {
@@ -31,13 +32,15 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
           },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // moved here from the /api-only block below — this is what actually
+          // overrides Vercel's default "*" on every route, including /login
+          { key: "Access-Control-Allow-Origin", value: productionOrigin },
         ],
       },
       {
-        // CORS: only /api/* needs it, scoped to our own origin — not the whole site
+        // API-specific CORS details only relevant for actual API routes
         source: "/api/:path*",
         headers: [
-          { key: "Access-Control-Allow-Origin", value: productionOrigin },
           { key: "Access-Control-Allow-Methods", value: "GET, POST, OPTIONS" },
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
         ],
