@@ -386,7 +386,7 @@ export default function POSPage() {
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
 
       {/* TOP NAVBAR */}
-      <div className="relative z-10 w-full flex items-center gap-6 px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
+      <div className="relative z-10 w-full flex items-center gap-6 px-6 py-3 shrink-0 flex-wrap lg:flex-nowrap" style={{ backgroundColor: '#7B1111' }}>
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
           <div className="w-10 h-10 rounded-full bg-yellow-300 border-2 border-white flex items-center justify-center overflow-hidden">
@@ -407,7 +407,7 @@ export default function POSPage() {
           ))}
         </div>
         {stats && (
-          <div className="flex items-center gap-4 ml-auto">
+  <div className="hidden lg:flex items-center gap-4 ml-auto">
             <div className="text-right">
               <p className="text-white text-xs opacity-60 font-semibold uppercase tracking-wide">Today's Sales</p>
               <p className="text-white font-black text-lg leading-none">₱{stats.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
@@ -431,7 +431,7 @@ export default function POSPage() {
       </div>
 
       {/* BODY */}
-      <div className="flex flex-1 relative overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 relative overflow-hidden">
         <LogoWatermark />
 
         {/* PRODUCTS PANEL */}
@@ -453,7 +453,7 @@ export default function POSPage() {
         </div>
 
         {/* CART PANEL */}
-        <div className="relative z-10 w-80 shrink-0 flex flex-col m-4 ml-0 rounded-sm overflow-hidden"
+        <div className="relative z-10 w-full lg:w-80 shrink-0 flex flex-col m-4 lg:ml-0 rounded-sm overflow-hidden"
           style={{ backgroundColor: 'white', boxShadow: '0px 0px 15px rgba(0,0,0,0.25)' }}>
 
           <div className="px-5 py-4 shrink-0" style={{ backgroundColor: '#220901' }}>

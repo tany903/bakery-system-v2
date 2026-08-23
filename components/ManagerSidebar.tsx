@@ -18,7 +18,7 @@ const links = [
 export default function ManagerSidebar() {
   const pathname = usePathname()
   return (
-    <div className="relative z-10 flex flex-col gap-2 p-3 w-28 shrink-0 overflow-hidden" style={{ position: 'sticky', top: 0, height: '100vh', alignSelf: 'flex-start' }}>
+    <div className="relative z-10 flex flex-col gap-2 p-3 w-16 lg:w-28 shrink-0 overflow-hidden" style={{ position: 'sticky', top: 0, height: '100vh', alignSelf: 'flex-start' }}>
       {links.map(link => {
         const active = pathname === link.href
         return (
@@ -27,7 +27,7 @@ export default function ManagerSidebar() {
             style={active ? { backgroundColor: '#1a2340' } : { boxShadow: '2px 2px 7px rgba(0,0,0,0.2)' }}>
             <img src={link.icon} alt="" className="w-7 h-7"
               style={active ? { filter: 'brightness(0) invert(1)' } : {}} />
-            <span className="text-xs font-semibold leading-tight">{link.label}</span>
+            <span className="hidden lg:block text-xs font-semibold leading-tight">{link.label}</span>
           </a>
         )
       })}
