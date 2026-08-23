@@ -169,7 +169,7 @@ export default function RestockRequestsPage() {
     } else if (dateFilter === 'custom' && dateFrom) {
       const start = new Date(dateFrom)
       result = result.filter(r => new Date(r.created_at) >= start)
-      if (dateTo) {
+      if (dateTo && dateTo >= dateFrom) {
         const end = new Date(dateTo); end.setHours(23, 59, 59, 999)
         result = result.filter(r => new Date(r.created_at) <= end)
       }
@@ -579,21 +579,23 @@ export default function RestockRequestsPage() {
       </div>
 
       {dateFilter === 'custom' && (
-        <div className="flex gap-3 mb-5 items-end justify-end">
-          <div>
-            <label className={labelClass}>From</label>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900" />
-          </div>
-          <div>
-            <label className={labelClass}>To</label>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900" />
-          </div>
-          <button onClick={() => { setDateFrom(''); setDateTo('') }}
-            className="px-3 py-2 rounded-sm text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 shadow-sm">Clear</button>
-        </div>
-      )}
+  <div className="flex gap-3 mb-5 items-end justify-end">
+    <div>
+      <label className={labelClass}>From</label>
+      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+        max={dateTo || undefined}
+        className="text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900" />
+    </div>
+    <div>
+      <label className={labelClass}>To</label>
+      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+        min={dateFrom || undefined}
+        className="text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900" />
+    </div>
+    <button onClick={() => { setDateFrom(''); setDateTo('') }}
+      className="px-3 py-2 rounded-sm text-xs font-bold text-gray-700 bg-white hover:bg-gray-100 shadow-sm">Clear</button>
+  </div>
+)}
 
       {filteredRequests.length === 0 ? (
         <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
