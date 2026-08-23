@@ -25,6 +25,20 @@ import ExpenseCard from '@/components/ExpenseCard'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
 
+// Monday–Sunday range containing the given 'YYYY-MM-DD' date string
+function getWeekRange(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDay() // 0 = Sunday
+  const diffToMonday = day === 0 ? -6 : 1 - day
+  const monday = new Date(d)
+  monday.setDate(d.getDate() + diffToMonday)
+  monday.setHours(0, 0, 0, 0)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  sunday.setHours(23, 59, 59, 999)
+  return { start: monday, end: sunday }
+}
+
 export default function ExpensesPage() {
   const router = useRouter()
 
@@ -42,6 +56,10 @@ export default function ExpensesPage() {
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1)
   const [filterYear, setFilterYear] = useState(new Date().getFullYear())
+
+  // Date range mode — monthly (existing behavior), or the new weekly/daily views
+  const [filterMode, setFilterMode] = useState<'monthly' | 'weekly' | 'daily'>('monthly')
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]) // anchor date for weekly/daily
 
   // Add expense
   const [showAddModal, setShowAddModal] = useState(false)
@@ -88,7 +106,7 @@ export default function ExpensesPage() {
   const [categoryView, setCategoryView] = useState<'active' | 'archived'>('active')
 
   useEffect(() => { checkAuthAndLoad() }, [])
-  useEffect(() => { if (!loading) loadSummary() }, [filterMonth, filterYear, loading])
+  useEffect(() => { if (!loading) loadSummary() }, [filterMonth, filterYear, filterMode, filterDate, loading])
 
   async function checkAuthAndLoad() {
     try {
@@ -121,8 +139,17 @@ export default function ExpensesPage() {
 
   async function loadSummary() {
     try {
-      const data = await getMonthlyExpenseSummary(filterYear, filterMonth)
-      setSummary(data)
+      if (filterMode === 'monthly') {
+        const data = await getMonthlyExpenseSummary(filterYear, filterMonth)
+        setSummary(data)
+        return
+      }
+      // Weekly/daily: getMonthlyExpenseSummary is month-scoped (and also pulls
+      // revenue from sales), so for these finer-grained views we compute the
+      // expense-side numbers locally from what's already loaded rather than
+      // adding new DB-facing summary functions. Revenue stays whatever was
+      // last loaded is not shown here — see summary card gating below.
+      setSummary(null)
     } catch {}
   }
 
@@ -255,14 +282,49 @@ export default function ExpensesPage() {
 
   const handleLogout = async () => { await signOut(); router.push('/login') }
 
-  const filteredExpenses = expenses.filter((expense) => {
-    const expDate = new Date(expense.expense_date + 'T00:00:00Z')
-    return expDate.getUTCMonth() + 1 === filterMonth && expDate.getUTCFullYear() === filterYear &&
-      (filterCategory === 'all' || expense.category_id === filterCategory)
-  })
-
+  // Range label shown next to the filter controls
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
+  const weekRange = getWeekRange(filterDate)
+  const rangeLabel = filterMode === 'monthly'
+    ? `${monthNames[filterMonth - 1]} ${filterYear}`
+    : filterMode === 'weekly'
+      ? `${weekRange.start.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })} – ${weekRange.end.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : new Date(filterDate + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })
+
+  const filteredExpenses = expenses.filter((expense) => {
+    const matchesCategory = filterCategory === 'all' || expense.category_id === filterCategory
+    const expDate = new Date(expense.expense_date + 'T00:00:00Z')
+
+    if (filterMode === 'monthly') {
+      return expDate.getUTCMonth() + 1 === filterMonth && expDate.getUTCFullYear() === filterYear && matchesCategory
+    }
+
+    if (filterMode === 'daily') {
+      const target = new Date(filterDate + 'T00:00:00Z')
+      return expDate.getUTCFullYear() === target.getUTCFullYear() &&
+        expDate.getUTCMonth() === target.getUTCMonth() &&
+        expDate.getUTCDate() === target.getUTCDate() &&
+        matchesCategory
+    }
+
+    // weekly
+    const { start, end } = weekRange
+    const expLocal = new Date(expense.expense_date + 'T00:00:00')
+    return expLocal >= start && expLocal <= end && matchesCategory
+  })
+
+  // For weekly/daily, the summary cards fall back to local computation from
+  // filteredExpenses since getMonthlyExpenseSummary only covers full months.
+  const localTotalExpenses = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
+  const localCategoryMap: { [key: string]: number } = {}
+  filteredExpenses.forEach(e => {
+    const cat = e.expense_categories?.name || 'Uncategorized'
+    localCategoryMap[cat] = (localCategoryMap[cat] || 0) + Number(e.amount)
+  })
+  const localExpensesByCategory = Object.entries(localCategoryMap)
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total)
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -312,21 +374,44 @@ export default function ExpensesPage() {
           {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error} <button onClick={() => setError('')} className="ml-3 underline text-xs">Dismiss</button></div>}
           {success && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-green-500">{success}</div>}
 
-          <div className="flex items-center gap-3 mb-5">
-            <select value={filterMonth} onChange={e => setFilterMonth(parseInt(e.target.value))}
-              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
-              style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
-              {monthNames.map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
-            </select>
-            <select value={filterYear} onChange={e => setFilterYear(parseInt(e.target.value))}
-              className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
-              style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
-              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <span className="text-xs font-semibold text-gray-700">{monthNames[filterMonth - 1]} {filterYear}</span>
+          {/* Mode switch: Monthly / Weekly / Daily */}
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex gap-2">
+              {(['monthly', 'weekly', 'daily'] as const).map(mode => (
+                <button key={mode} onClick={() => setFilterMode(mode)}
+                  className="px-4 py-1.5 rounded-sm text-xs font-bold capitalize transition-colors"
+                  style={filterMode === mode
+                    ? { backgroundColor: '#1a2340', color: 'white' }
+                    : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+                  {mode}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {summary && (
+          <div className="flex items-center gap-3 mb-5">
+            {filterMode === 'monthly' ? (
+              <>
+                <select value={filterMonth} onChange={e => setFilterMonth(parseInt(e.target.value))}
+                  className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
+                  style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+                  {monthNames.map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
+                </select>
+                <select value={filterYear} onChange={e => setFilterYear(parseInt(e.target.value))}
+                  className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
+                  style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+                  {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </>
+            ) : (
+              <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+                className="text-xs font-bold px-3 py-2 rounded-sm border border-gray-200 bg-white text-gray-900 focus:outline-none"
+                style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }} />
+            )}
+            <span className="text-xs font-semibold text-gray-700">{rangeLabel}</span>
+          </div>
+
+          {filterMode === 'monthly' && summary && (
             <div className="grid grid-cols-4 gap-4 mb-6">
               <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
                 <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Revenue</p>
@@ -355,7 +440,27 @@ export default function ExpensesPage() {
             </div>
           )}
 
-          {summary && summary.expensesByCategory.length > 0 && (
+          {filterMode !== 'monthly' && (
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Expenses</p>
+                <p className="text-2xl font-black text-white">₱{localTotalExpenses.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                <p className="text-white text-xs opacity-50 mt-1">{filteredExpenses.length} record{filteredExpenses.length !== 1 ? 's' : ''}</p>
+              </div>
+              <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Top Expense</p>
+                <p className="text-lg font-black text-white">{localExpensesByCategory[0]?.category || '—'}</p>
+                {localExpensesByCategory[0] && (
+                  <p className="text-white text-xs opacity-50 mt-1">₱{localExpensesByCategory[0].total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                )}
+              </div>
+              <div className="rounded-sm p-6 flex items-center" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                <p className="text-white text-xs opacity-60">Revenue & net income are shown in Monthly view only.</p>
+              </div>
+            </div>
+          )}
+
+          {filterMode === 'monthly' && summary && summary.expensesByCategory.length > 0 && (
             <div className="bg-white rounded-sm p-5 mb-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
               <div className="flex items-center gap-2 mb-4">
                 <img src="/icons/Bar_chart.svg" alt="" className="w-5 h-5 opacity-60" />
@@ -364,6 +469,31 @@ export default function ExpensesPage() {
               <div className="space-y-3">
                 {summary.expensesByCategory.map(({ category, total }) => {
                   const pct = summary.totalExpenses > 0 ? Math.round((total / summary.totalExpenses) * 100) : 0
+                  return (
+                    <div key={category}>
+                      <div className="flex justify-between text-xs font-semibold mb-1">
+                        <span className="text-gray-700">{category}</span>
+                        <span className="text-gray-500">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })} ({pct}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-2">
+                        <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: '#F5A623' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {filterMode !== 'monthly' && localExpensesByCategory.length > 0 && (
+            <div className="bg-white rounded-sm p-5 mb-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <img src="/icons/Bar_chart.svg" alt="" className="w-5 h-5 opacity-60" />
+                <h2 className="font-bold text-gray-800">Expenses by Category</h2>
+              </div>
+              <div className="space-y-3">
+                {localExpensesByCategory.map(({ category, total }) => {
+                  const pct = localTotalExpenses > 0 ? Math.round((total / localTotalExpenses) * 100) : 0
                   return (
                     <div key={category}>
                       <div className="flex justify-between text-xs font-semibold mb-1">
@@ -414,7 +544,7 @@ export default function ExpensesPage() {
                 <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                   <div className="text-5xl mb-3">💸</div>
                   <p className="text-lg font-bold text-gray-600">No expenses found</p>
-                  <p className="text-sm text-gray-400 mt-1">No expenses for {monthNames[filterMonth - 1]} {filterYear}{filterCategory !== 'all' ? ' in this category' : ''}</p>
+                  <p className="text-sm text-gray-400 mt-1">No expenses for {rangeLabel}{filterCategory !== 'all' ? ' in this category' : ''}</p>
                   <button onClick={() => setShowAddModal(true)} className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white" style={{ backgroundColor: '#1a2340' }}>+ Add First Expense</button>
                 </div>
               ) : (
