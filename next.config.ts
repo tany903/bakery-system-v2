@@ -46,17 +46,24 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Never cache the root/redirect page
+        source: "/",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
+        ],
+      },
+      {
         // Never cache the login page
         source: "/login",
         headers: [
-          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
         ],
       },
       {
         // Never cache the dashboard
         source: "/dashboard/:path*",
         headers: [
-          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, private" },
         ],
       },
       {
@@ -64,6 +71,15 @@ const nextConfig: NextConfig = {
         source: "/(pos|transactions|expenses|purchase-orders|reservations|inventory|products|ingredients|staff|audit-logs|analytics)/:path*",
         headers: [
           { key: "Cache-Control", value: "private, no-store, must-revalidate" },
+        ],
+      },
+      {
+        // Static build assets: content-hashed filenames, safe to cache
+        // aggressively and immutably — the filename itself changes on
+        // rebuild, so there's no staleness risk
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
       },
     ];
