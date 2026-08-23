@@ -18,7 +18,7 @@ const links = [
 export default function ManagerSidebar() {
   const pathname = usePathname()
   return (
-    <div className="relative z-10 flex flex-col gap-1 p-2 w-16 lg:w-28 shrink-0 overflow-y-auto" style={{ position: 'sticky', top: 0, height: '100vh', alignSelf: 'flex-start' }}>
+    <div className="relative z-10 flex flex-col gap-1 p-2 w-16 lg:w-28 shrink-0 overflow-y-auto scrollbar-hide" style={{ position: 'sticky', top: 0, height: '100vh', alignSelf: 'flex-start' }}>
       {links.map(link => {
         const active = pathname === link.href
         return (
