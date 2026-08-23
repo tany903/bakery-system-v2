@@ -511,11 +511,11 @@ export default function POSPage() {
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-2">
                           <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                            className="w-7 h-7 rounded-sm font-black text-sm flex items-center justify-center"
+                            className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center"
                             style={{ backgroundColor: '#F5A623', color: 'white' }}>−</button>
                           <span className="w-8 text-center font-black text-sm text-gray-800">{item.quantity}</span>
                           <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                            className="w-7 h-7 rounded-sm font-black text-sm flex items-center justify-center"
+                            className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center"
                             style={{ backgroundColor: '#F5A623', color: 'white' }}>+</button>
                         </div>
                         <span className="font-black text-sm text-gray-900">₱{getItemSubtotal(item).toFixed(2)}</span>
@@ -707,7 +707,7 @@ export default function POSPage() {
                 {restockError && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-red-500">{restockError}</div>}
                 {restockSuccess && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-green-500">{restockSuccess}</div>}
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 mb-1">Customer Name *</label>
                     <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)}
