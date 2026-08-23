@@ -41,6 +41,7 @@ const productionNavLinks = [
 
 const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
 const labelClass = "block text-xs font-bold text-gray-500 mb-1"
+const UNIT_OPTIONS = ['kg', 'g', 'liters', 'ml', 'pieces', 'dozen', 'pack', 'box', 'sack']
 
 function StockBadge({ stock, min }: { stock: number; min: number }) {
   if (stock === 0) return <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">Out</span>
@@ -379,7 +380,13 @@ export default function IngredientsPage() {
             </div>
             <form onSubmit={handleAddIngredient} className="px-6 py-5 space-y-4">
               <div><label className={labelClass}>Ingredient Name *</label><input type="text" value={newName} onChange={e => setNewName(e.target.value)} required className={inputClass} placeholder="e.g., Flour, Sugar, Eggs" /></div>
-              <div><label className={labelClass}>Unit of Measurement *</label><input type="text" value={newUnit} onChange={e => setNewUnit(e.target.value)} required className={inputClass} placeholder="e.g., kg, liters, pieces" /></div>
+              <div>
+                <label className={labelClass}>Unit of Measurement *</label>
+                <select value={newUnit} onChange={e => setNewUnit(e.target.value)} required className={inputClass}>
+                  <option value="">Select unit...</option>
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
               <div><label className={labelClass}>Minimum Stock Level *</label><input type="number" min="0" value={newMinStock} onChange={e => setNewMinStock(e.target.value)} required className={inputClass} placeholder="e.g., 50" /></div>
               <div><label className={labelClass}>Category (optional)</label>
                 <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className={inputClass}>
@@ -405,7 +412,13 @@ export default function IngredientsPage() {
             </div>
             <form onSubmit={handleEditIngredient} className="px-6 py-5 space-y-4">
               <div><label className={labelClass}>Ingredient Name *</label><input type="text" value={editName} onChange={e => setEditName(e.target.value)} required className={inputClass} /></div>
-              <div><label className={labelClass}>Unit of Measurement *</label><input type="text" value={editUnit} onChange={e => setEditUnit(e.target.value)} required className={inputClass} /></div>
+              <div>
+                <label className={labelClass}>Unit of Measurement *</label>
+                <select value={editUnit} onChange={e => setEditUnit(e.target.value)} required className={inputClass}>
+                  <option value="">Select unit...</option>
+                  {[...new Set([...UNIT_OPTIONS, editUnit].filter(Boolean))].map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
               <div><label className={labelClass}>Minimum Stock Level *</label><input type="number" min="0" value={editMinStock} onChange={e => setEditMinStock(e.target.value)} required className={inputClass} /></div>
               <div><label className={labelClass}>Category (optional)</label>
                 <select value={editCategory} onChange={e => setEditCategory(e.target.value)} className={inputClass}>
