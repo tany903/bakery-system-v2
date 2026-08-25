@@ -39,6 +39,8 @@ function getWeekRange(dateStr: string) {
   return { start: monday, end: sunday }
 }
 
+const ARCHIVED_EXPENSES_PER_PAGE = 10
+
 export default function ExpensesPage() {
   const router = useRouter()
 
@@ -105,8 +107,12 @@ export default function ExpensesPage() {
   const [archivedCategories, setArchivedCategories] = useState<ExpenseCategory[]>([])
   const [categoryView, setCategoryView] = useState<'active' | 'archived'>('active')
 
+  // Archived expenses pagination
+  const [archivedPage, setArchivedPage] = useState(1)
+
   useEffect(() => { checkAuthAndLoad() }, [])
   useEffect(() => { if (!loading) loadSummary() }, [filterMonth, filterYear, filterMode, filterDate, loading])
+  useEffect(() => { setArchivedPage(1) }, [archivedExpenses.length, activeTab])
 
   async function checkAuthAndLoad() {
     try {
@@ -325,6 +331,12 @@ export default function ExpensesPage() {
   const localExpensesByCategory = Object.entries(localCategoryMap)
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total)
+
+  // Archived expenses pagination derived values
+  const archivedTotalPages = Math.max(1, Math.ceil(archivedExpenses.length / ARCHIVED_EXPENSES_PER_PAGE))
+  const archivedPageSafe = Math.min(archivedPage, archivedTotalPages)
+  const archivedStartIdx = (archivedPageSafe - 1) * ARCHIVED_EXPENSES_PER_PAGE
+  const paginatedArchivedExpenses = archivedExpenses.slice(archivedStartIdx, archivedStartIdx + ARCHIVED_EXPENSES_PER_PAGE)
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -691,7 +703,7 @@ export default function ExpensesPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {archivedExpenses.map((expense: any) => (
+                        {paginatedArchivedExpenses.map((expense: any) => (
                           <tr key={expense.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                             <td className="px-5 py-3 text-sm font-semibold text-gray-800">{expense.name}</td>
                             <td className="px-5 py-3 text-sm font-black text-gray-900">₱{Number(expense.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
@@ -712,6 +724,55 @@ export default function ExpensesPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Pagination controls — 10 per page */}
+                  <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+                    <p className="text-xs text-gray-500">
+                      Showing {archivedExpenses.length === 0 ? 0 : archivedStartIdx + 1}
+                      {'–'}
+                      {Math.min(archivedStartIdx + ARCHIVED_EXPENSES_PER_PAGE, archivedExpenses.length)} of {archivedExpenses.length}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setArchivedPage(p => Math.max(1, p - 1))}
+                        disabled={archivedPageSafe === 1}
+                        className="px-3 py-1.5 rounded-sm text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        Prev
+                      </button>
+                      {Array.from({ length: archivedTotalPages }, (_, i) => i + 1)
+                        .filter(pageNum =>
+                          pageNum === 1 ||
+                          pageNum === archivedTotalPages ||
+                          Math.abs(pageNum - archivedPageSafe) <= 1
+                        )
+                        .reduce<(number | 'ellipsis')[]>((acc, pageNum, idx, arr) => {
+                          if (idx > 0 && pageNum - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
+                          acc.push(pageNum)
+                          return acc
+                        }, [])
+                        .map((item, idx) =>
+                          item === 'ellipsis' ? (
+                            <span key={`ellipsis-${idx}`} className="px-2 text-xs text-gray-400">…</span>
+                          ) : (
+                            <button
+                              key={item}
+                              onClick={() => setArchivedPage(item)}
+                              className="px-3 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                              style={item === archivedPageSafe
+                                ? { backgroundColor: '#1a2340', color: 'white' }
+                                : { backgroundColor: 'white', color: '#374151', border: '1px solid #e5e7eb' }}>
+                              {item}
+                            </button>
+                          )
+                        )}
+                      <button
+                        onClick={() => setArchivedPage(p => Math.min(archivedTotalPages, p + 1))}
+                        disabled={archivedPageSafe === archivedTotalPages}
+                        className="px-3 py-1.5 rounded-sm text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                        Next
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
