@@ -40,6 +40,7 @@ function getWeekRange(dateStr: string) {
 }
 
 const ARCHIVED_EXPENSES_PER_PAGE = 10
+const ARCHIVED_CATEGORIES_PER_PAGE = 10
 
 export default function ExpensesPage() {
   const router = useRouter()
@@ -110,9 +111,13 @@ export default function ExpensesPage() {
   // Archived expenses pagination
   const [archivedPage, setArchivedPage] = useState(1)
 
+  // Archived categories pagination
+  const [archivedCategoryPage, setArchivedCategoryPage] = useState(1)
+
   useEffect(() => { checkAuthAndLoad() }, [])
   useEffect(() => { if (!loading) loadSummary() }, [filterMonth, filterYear, filterMode, filterDate, loading])
   useEffect(() => { setArchivedPage(1) }, [archivedExpenses.length, activeTab])
+  useEffect(() => { setArchivedCategoryPage(1) }, [archivedCategories.length, categoryView])
 
   async function checkAuthAndLoad() {
     try {
@@ -337,6 +342,12 @@ export default function ExpensesPage() {
   const archivedPageSafe = Math.min(archivedPage, archivedTotalPages)
   const archivedStartIdx = (archivedPageSafe - 1) * ARCHIVED_EXPENSES_PER_PAGE
   const paginatedArchivedExpenses = archivedExpenses.slice(archivedStartIdx, archivedStartIdx + ARCHIVED_EXPENSES_PER_PAGE)
+
+  // Archived categories pagination derived values
+  const archivedCategoryTotalPages = Math.max(1, Math.ceil(archivedCategories.length / ARCHIVED_CATEGORIES_PER_PAGE))
+  const archivedCategoryPageSafe = Math.min(archivedCategoryPage, archivedCategoryTotalPages)
+  const archivedCategoryStartIdx = (archivedCategoryPageSafe - 1) * ARCHIVED_CATEGORIES_PER_PAGE
+  const paginatedArchivedCategories = archivedCategories.slice(archivedCategoryStartIdx, archivedCategoryStartIdx + ARCHIVED_CATEGORIES_PER_PAGE)
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -651,24 +662,90 @@ export default function ExpensesPage() {
                     <p className="text-lg font-bold text-gray-600">No archived categories</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {archivedCategories.map(cat => (
-                      <div key={cat.id} className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
-                        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: '#6B7280' }}>
-                          <p className="text-white font-black text-sm">{cat.name}</p>
-                          <button onClick={() => handleRestoreCategory(cat)}
-                            className="text-xs font-bold px-2.5 py-1 rounded-sm bg-green-600 text-white hover:bg-green-700 transition-colors">
-                            Restore
-                          </button>
-                        </div>
-                        <div className="px-4 py-4">
-                          {cat.description && <p className="text-xs text-gray-500 mb-1">{cat.description}</p>}
-                          <p className="text-xs text-gray-400">
-                            Archived {cat.archived_at ? new Date(cat.archived_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                          </p>
-                        </div>
+                  <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                    <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                      <img src="/icons/Book.svg" alt="" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
+                      <h2 className="font-bold text-white">Archived Categories</h2>
+                      <span className="ml-auto text-xs text-white opacity-60">{archivedCategories.length} categories</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                            <th className="px-5 py-3 font-semibold">Category</th>
+                            <th className="px-5 py-3 font-semibold">Description</th>
+                            <th className="px-5 py-3 font-semibold">Archived</th>
+                            <th className="px-5 py-3 font-semibold">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedArchivedCategories.map(cat => (
+                            <tr key={cat.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                              <td className="px-5 py-3 text-sm font-semibold text-gray-800">{cat.name}</td>
+                              <td className="px-5 py-3 text-xs text-gray-500">{cat.description || '—'}</td>
+                              <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">
+                                {cat.archived_at ? new Date(cat.archived_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                              </td>
+                              <td className="px-5 py-3">
+                                <button onClick={() => handleRestoreCategory(cat)}
+                                  className="text-xs font-bold px-3 py-1.5 rounded-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                  Restore
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination controls — 10 per page */}
+                    <div className="flex items-center justify-between px-5 py-4 border-t border-gray-100">
+                      <p className="text-xs text-gray-500">
+                        Showing {archivedCategories.length === 0 ? 0 : archivedCategoryStartIdx + 1}
+                        {'–'}
+                        {Math.min(archivedCategoryStartIdx + ARCHIVED_CATEGORIES_PER_PAGE, archivedCategories.length)} of {archivedCategories.length}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setArchivedCategoryPage(p => Math.max(1, p - 1))}
+                          disabled={archivedCategoryPageSafe === 1}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          Prev
+                        </button>
+                        {Array.from({ length: archivedCategoryTotalPages }, (_, i) => i + 1)
+                          .filter(pageNum =>
+                            pageNum === 1 ||
+                            pageNum === archivedCategoryTotalPages ||
+                            Math.abs(pageNum - archivedCategoryPageSafe) <= 1
+                          )
+                          .reduce<(number | 'ellipsis')[]>((acc, pageNum, idx, arr) => {
+                            if (idx > 0 && pageNum - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
+                            acc.push(pageNum)
+                            return acc
+                          }, [])
+                          .map((item, idx) =>
+                            item === 'ellipsis' ? (
+                              <span key={`ellipsis-${idx}`} className="px-2 text-xs text-gray-400">…</span>
+                            ) : (
+                              <button
+                                key={item}
+                                onClick={() => setArchivedCategoryPage(item)}
+                                className="px-3 py-1.5 rounded-sm text-xs font-bold transition-colors"
+                                style={item === archivedCategoryPageSafe
+                                  ? { backgroundColor: '#1a2340', color: 'white' }
+                                  : { backgroundColor: 'white', color: '#374151', border: '1px solid #e5e7eb' }}>
+                                {item}
+                              </button>
+                            )
+                          )}
+                        <button
+                          onClick={() => setArchivedCategoryPage(p => Math.min(archivedCategoryTotalPages, p + 1))}
+                          disabled={archivedCategoryPageSafe === archivedCategoryTotalPages}
+                          className="px-3 py-1.5 rounded-sm text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                          Next
+                        </button>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 )
               )}
