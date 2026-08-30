@@ -1,16 +1,38 @@
 // lib/expenses.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { supabase } from './supabase'
-import { getMonthlyExpenseSummary, getExpensesByDateRange } from './expenses'
+import {
+  getAllExpenseCategories,
+  createExpenseCategory,
+  updateExpenseCategory,
+  archiveExpenseCategory,
+  getArchivedExpenseCategories,
+  restoreExpenseCategory,
+  deleteExpenseCategory,
+  getAllExpenses,
+  getArchivedExpenses,
+  getExpensesByDateRange,
+  createExpense,
+  updateExpense,
+  archiveExpense,
+  restoreExpense,
+  getMonthlyExpenseSummary,
+} from './expenses'
+import { logExpenseEvent } from './expense-logs'
+
+vi.mock('./expense-logs', () => ({
+  logExpenseEvent: vi.fn(),
+}))
 
 interface Fixtures {
-  expenses: any[]
-  sales: any[]
+  expenses?: any[]
+  sales?: any[]
+  categories?: any[]
 }
 
 interface CapturedArgs {
-  expenses?: { gte: string; lte: string }
-  sales?: { gte: string; lt: string }
+  expenses?: { gte?: string; lte?: string; eq?: Record<string, any> }
+  sales?: { gte?: string; lt?: string }
 }
 
 function mockSupabaseFor(fixtures: Fixtures): CapturedArgs {
@@ -18,15 +40,55 @@ function mockSupabaseFor(fixtures: Fixtures): CapturedArgs {
 
   vi.mocked(supabase.from).mockImplementation((table: string) => {
     if (table === 'expenses') {
-      return {
+      const builder: any = {
         select: vi.fn().mockReturnThis(),
-        gte: vi.fn((_col: string, gteVal: string) => ({
-          lte: vi.fn((_col2: string, lteVal: string) => {
-            captured.expenses = { gte: gteVal, lte: lteVal }
-            return Promise.resolve({ data: fixtures.expenses, error: null })
+        eq: vi.fn((col: string, val: any) => {
+          captured.expenses = captured.expenses || {}
+          captured.expenses.eq = captured.expenses.eq || {}
+          captured.expenses.eq[col] = val
+          return builder
+        }),
+        gte: vi.fn((_col: string, gteVal: string) => {
+          captured.expenses = captured.expenses || {}
+          captured.expenses.gte = gteVal
+          return builder
+        }),
+        lte: vi.fn((_col2: string, lteVal: string) => {
+          captured.expenses = captured.expenses || {}
+          captured.expenses.lte = lteVal
+          return Promise.resolve({ data: fixtures.expenses || [], error: null })
+        }),
+        order: vi.fn().mockResolvedValue({ data: fixtures.expenses || [], error: null }),
+        insert: vi.fn((data: any) => ({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'exp-123', ...data },
+              error: null,
+            }),
           }),
         })),
-      } as any
+        update: vi.fn((data: any) => ({
+          eq: vi.fn((_col: string, idVal: string) => ({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: {
+                  id: idVal,
+                  name: data.name ?? 'Sample Expense',
+                  amount: data.amount ?? 150,
+                  expense_date: data.expense_date ?? '2026-03-01',
+                  category_id: data.category_id ?? 'cat-1',
+                  notes: data.notes ?? 'Note',
+                },
+                error: null,
+              }),
+            }),
+          })),
+        })),
+        delete: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }
+      return builder
     }
 
     if (table === 'sales') {
@@ -35,10 +97,41 @@ function mockSupabaseFor(fixtures: Fixtures): CapturedArgs {
         gte: vi.fn((_col: string, gteVal: string) => ({
           lt: vi.fn((_col2: string, ltVal: string) => {
             captured.sales = { gte: gteVal, lt: ltVal }
-            return Promise.resolve({ data: fixtures.sales, error: null })
+            return Promise.resolve({ data: fixtures.sales || [], error: null })
           }),
         })),
       } as any
+    }
+
+    if (table === 'expense_categories') {
+      const catBuilder: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: fixtures.categories || [], error: null }),
+        insert: vi.fn((data: any) => ({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: 'cat-123', ...data },
+              error: null,
+            }),
+          }),
+        })),
+        update: vi.fn((data: any) => ({
+          eq: vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { id: 'cat-123', ...data },
+                error: null,
+              }),
+            }),
+            then: (resolve: any) => resolve({ error: null }),
+          }),
+        })),
+        delete: vi.fn().mockReturnValue({
+          eq: vi.fn().mockResolvedValue({ error: null }),
+        }),
+      }
+      return catBuilder
     }
 
     return {} as any
@@ -46,6 +139,156 @@ function mockSupabaseFor(fixtures: Fixtures): CapturedArgs {
 
   return captured
 }
+
+describe('EXPENSE CATEGORIES CRUD', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetches non-archived expense categories ordered by name', async () => {
+    const mockData = [{ id: '1', name: 'Rent', is_archived: false }]
+    mockSupabaseFor({ categories: mockData })
+
+    const res = await getAllExpenseCategories()
+    expect(res).toEqual(mockData)
+  })
+
+  it('creates a new expense category', async () => {
+    mockSupabaseFor({})
+    const res = await createExpenseCategory('Utilities', 'Electric & Water')
+
+    expect(res).toEqual({
+      id: 'cat-123',
+      name: 'Utilities',
+      description: 'Electric & Water',
+    })
+  })
+
+  it('updates an existing expense category', async () => {
+    mockSupabaseFor({})
+    const res = await updateExpenseCategory('cat-1', 'Updated Category')
+
+    expect(res).toEqual({
+      id: 'cat-123',
+      name: 'Updated Category',
+      description: null,
+    })
+  })
+
+  it('archives an expense category', async () => {
+    mockSupabaseFor({})
+    await expect(archiveExpenseCategory('cat-1')).resolves.not.toThrow()
+  })
+
+  it('fetches archived expense categories', async () => {
+    const mockData = [{ id: '2', name: 'Old Category', is_archived: true }]
+    mockSupabaseFor({ categories: mockData })
+
+    const res = await getArchivedExpenseCategories()
+    expect(res).toEqual(mockData)
+  })
+
+  it('restores an archived expense category', async () => {
+    mockSupabaseFor({})
+    await expect(restoreExpenseCategory('cat-1')).resolves.not.toThrow()
+  })
+
+  it('deletes an expense category directly', async () => {
+    mockSupabaseFor({})
+    await expect(deleteExpenseCategory('cat-1')).resolves.not.toThrow()
+  })
+})
+
+describe('EXPENSES CRUD & AUDIT LOGGING', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetches active expenses', async () => {
+    const mockData = [{ id: 'exp-1', name: 'Flour', amount: 500 }]
+    mockSupabaseFor({ expenses: mockData })
+
+    const res = await getAllExpenses()
+    expect(res).toEqual(mockData)
+  })
+
+  it('fetches archived expenses', async () => {
+    const mockData = [{ id: 'exp-2', name: 'Sugar', amount: 200, is_archived: true }]
+    mockSupabaseFor({ expenses: mockData })
+
+    const res = await getArchivedExpenses()
+    expect(res).toEqual(mockData)
+  })
+
+  it('creates an expense and triggers audit logging', async () => {
+    mockSupabaseFor({})
+
+    const res = await createExpense('Baking Powder', 150, '2026-03-01', 'user-1', 'cat-1', 'Bulk purchase')
+
+    expect(res.id).toBe('exp-123')
+    expect(logExpenseEvent).toHaveBeenCalledWith({
+      expenseId: 'exp-123',
+      action: 'created',
+      performedBy: 'user-1',
+      expenseName: 'Baking Powder',
+      amount: 150,
+      expenseDate: '2026-03-01',
+      categoryId: 'cat-1',
+      notes: 'Bulk purchase',
+    })
+  })
+
+  it('updates an expense and triggers audit logging', async () => {
+    mockSupabaseFor({})
+
+    await updateExpense('exp-1', { title: 'Updated Powder', amount: 180 }, 'user-1')
+
+    expect(logExpenseEvent).toHaveBeenCalledWith({
+      expenseId: 'exp-1',
+      action: 'updated',
+      performedBy: 'user-1',
+      expenseName: 'Updated Powder',
+      amount: 180,
+      expenseDate: '2026-03-01',
+      categoryId: 'cat-1',
+      notes: 'Note',
+    })
+  })
+
+  it('archives an expense (soft delete) and logs the event', async () => {
+    mockSupabaseFor({})
+
+    await archiveExpense('exp-1', 'user-1')
+
+    expect(logExpenseEvent).toHaveBeenCalledWith({
+      expenseId: 'exp-1',
+      action: 'archived',
+      performedBy: 'user-1',
+      expenseName: 'Sample Expense',
+      amount: 150,
+      expenseDate: '2026-03-01',
+      categoryId: 'cat-1',
+      notes: 'Note',
+    })
+  })
+
+  it('restores an archived expense and logs the event', async () => {
+    mockSupabaseFor({})
+
+    await restoreExpense('exp-1', 'user-1')
+
+    expect(logExpenseEvent).toHaveBeenCalledWith({
+      expenseId: 'exp-1',
+      action: 'restored',
+      performedBy: 'user-1',
+      expenseName: 'Sample Expense',
+      amount: 150,
+      expenseDate: '2026-03-01',
+      categoryId: 'cat-1',
+      notes: 'Note',
+    })
+  })
+})
 
 describe('getMonthlyExpenseSummary — totals and net income', () => {
   beforeEach(() => {
@@ -218,9 +461,6 @@ describe('getMonthlyExpenseSummary — sales revenue window (timestamptz boundar
 
     await getMonthlyExpenseSummary(2026, 3)
 
-    // Regression guard for the original bug: the old code used .lte() against
-    // midnight of the 31st, which excluded almost the entire last day of sales.
-    // The fix must query up to (but not including) April 1st.
     expect(captured.sales?.gte).toBe(new Date(2026, 2, 1).toISOString())
     expect(captured.sales?.lt).toBe(new Date(2026, 3, 1).toISOString())
   })
@@ -234,9 +474,7 @@ describe('getMonthlyExpenseSummary — sales revenue window (timestamptz boundar
     expect(captured.sales?.lt).toBe(new Date(2027, 0, 1).toISOString())
   })
 
-  it("includes a sale made late on the last day of the month in totalRevenue (the original bug excluded these)", async () => {
-    // This sale sits at 11:59 PM local time on the last day of March —
-    // exactly the kind of row the old inclusive-midnight .lte() bound would drop.
+  it('includes a sale made late on the last day of the month in totalRevenue', async () => {
     const lateSaleOnLastDay = new Date(2026, 2, 31, 23, 59, 0)
 
     mockSupabaseFor({
@@ -246,9 +484,6 @@ describe('getMonthlyExpenseSummary — sales revenue window (timestamptz boundar
 
     const summary = await getMonthlyExpenseSummary(2026, 3)
 
-    // The mock doesn't filter by date itself (that's Postgres's job in prod),
-    // so this confirms the app-level query boundaries are correct: the app
-    // must request a window that a real DB would actually return this row for.
     expect(summary.totalRevenue).toBe(450)
     expect(new Date(lateSaleOnLastDay.toISOString()).getTime()).toBeLessThan(
       new Date(new Date(2026, 3, 1).toISOString()).getTime()
@@ -267,6 +502,7 @@ describe('getExpensesByDateRange — date-boundary formatting', () => {
       if (table === 'expenses') {
         return {
           select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
           gte: vi.fn((_col: string, gteVal: string) => {
             captured.gte = gteVal
             return {
@@ -294,14 +530,11 @@ describe('getExpensesByDateRange — date-boundary formatting', () => {
     expect(captured.lte).toBe('2026-03-31')
   })
 
-  it('is timezone-agnostic by construction (no Date object involved, so no local/UTC ambiguity is possible)', async () => {
+  it('is timezone-agnostic by construction', async () => {
     const captured = mockExpensesTable([])
 
     await getExpensesByDateRange('2026-12-01', '2026-12-31')
 
-    // Since the function never touches `Date`/`toISOString`, this must hold
-    // identically in every timezone — proven by running the whole file under
-    // TZ=Asia/Manila, TZ=UTC, and TZ=America/Los_Angeles (see session notes).
     expect(captured.gte).toBe('2026-12-01')
     expect(captured.lte).toBe('2026-12-31')
   })
