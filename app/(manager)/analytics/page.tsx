@@ -14,6 +14,9 @@ import {
   getDisposalAnalytics,
   getWeeklyBreakdown,
   getDailySalesBreakdown, //watch
+  getProductionRecommendations,
+  getWasteReductionRecommendations,
+  getSlowMovingRecommendations,
   type DisposalAnalytics,
   type WeeklyBreakdown,
   type SalesSummary,
@@ -22,6 +25,9 @@ import {
   type SalesTrend,
   type BestSellingDay,
   type DailySalesBreakdown, //watch
+  type ProductionRecommendation,
+  type WasteRecommendation,
+  type SlowMovingRecommendation,
 } from '@/lib/analytics'
 import {
   BarChart, Bar, ComposedChart, Area, Cell, Line, LineChart,
@@ -29,6 +35,8 @@ import {
 } from 'recharts'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
+
 
 type Period = 'today' | 'week' | 'month' | 'year'
 
@@ -173,11 +181,18 @@ export default function AnalyticsPage() {
   const [dailyData, setDailyData] = useState<DailySalesBreakdown | null>(null) //watch
   const [dailyLoading, setDailyLoading] = useState(false) //watch
   const [dailyError, setDailyError] = useState('') //watch
+  const [productionRecs, setProductionRecs] = useState<ProductionRecommendation[]>([])
+  const [wasteRecs, setWasteRecs] = useState<WasteRecommendation[]>([])
+  const [slowMovingRecs, setSlowMovingRecs] = useState<SlowMovingRecommendation[]>([])
 
   useEffect(() => { checkAuthAndLoad() }, [])
   useEffect(() => { if (!loading) loadSummary() }, [period])
   useEffect(() => { if (!loading) loadDailyBreakdown(dailyDate) }, [dailyDate, loading]) //watch
 
+  // Recommendations are derived from sales, production, and disposal activity —
+  // refresh them automatically whenever any of that data changes, so managers
+  // never act on a stale recommendation.
+  useRealtimeRefresh(['sale_items', 'sales', 'production', 'stock_disposals', 'products'], loadPrescriptive)
 
   async function checkAuthAndLoad() {
     try {
@@ -210,8 +225,18 @@ export default function AnalyticsPage() {
 
   async function loadPrescriptive() {
     try {
-      const [recommendationsData, bestDaysData] = await Promise.all([getRestockRecommendations(), getBestSellingDays()])
-      setRecommendations(recommendationsData); setBestDays(bestDaysData)
+      const [recommendationsData, bestDaysData, productionData, wasteData, slowMovingData] = await Promise.all([
+        getRestockRecommendations(),
+        getBestSellingDays(),
+        getProductionRecommendations(),
+        getWasteReductionRecommendations(),
+        getSlowMovingRecommendations(),
+      ])
+      setRecommendations(recommendationsData)
+      setBestDays(bestDaysData)
+      setProductionRecs(productionData)
+      setWasteRecs(wasteData)
+      setSlowMovingRecs(slowMovingData)
     } catch {}
   }
 
@@ -856,6 +881,89 @@ export default function AnalyticsPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* ── PRODUCTION & WASTE RECOMMENDATIONS ── */}
+            <div className="grid grid-cols-2 gap-5 mt-5">
+              <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
+                  <h3 className="font-black text-gray-900">Production Recommendations</h3>
+                </div>
+                <p className="text-xs text-gray-400 mb-4">Comparing average daily sales demand against average daily production over the last 7 days.</p>
+                {productionRecs.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    <p className="text-sm">Production levels look aligned with demand right now.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {productionRecs.map(p => (
+                      <div key={p.product_name} className={`p-4 rounded-sm border ${
+                        p.direction === 'increase' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
+                      }`}>
+                        <p className="font-semibold text-sm text-gray-900">{p.product_name}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{p.detected}</p>
+                        <p className={`text-xs font-semibold mt-1 ${p.direction === 'increase' ? 'text-red-600' : 'text-yellow-700'}`}>{p.reason}</p>
+                        <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{p.action}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
+                  <h3 className="font-black text-gray-900">Waste Reduction Recommendations</h3>
+                </div>
+                <p className="text-xs text-gray-400 mb-4">Products with consistently high pull-outs or on-the-house disposals over the last 7 days.</p>
+                {wasteRecs.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400">
+                    <p className="text-sm">No excessive waste detected this week.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {wasteRecs.map(w => (
+                      <div key={w.product_name} className="p-4 rounded-sm border bg-red-50 border-red-200">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-sm text-gray-900">{w.product_name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{w.detected}</p>
+                            <p className="text-xs font-semibold text-red-600 mt-1">{w.reason}</p>
+                          </div>
+                          <p className="text-sm font-black text-red-600 shrink-0">₱{w.disposal_value.toFixed(2)}</p>
+                        </div>
+                        <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{w.action}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── SLOW-MOVING PRODUCTS ── */}
+            <div className="bg-white rounded-sm p-6 mt-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+              <div className="flex items-center gap-2 mb-1">
+                <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
+                <h3 className="font-black text-gray-900">Slow-Moving Product Recommendations</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-4">Products selling {`\u2264`}10 units over the last 7 days.</p>
+              {slowMovingRecs.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">No slow-moving products right now.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {slowMovingRecs.map(s => (
+                    <div key={s.product_name} className={`p-4 rounded-sm border ${s.units_sold === 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                      <p className="font-semibold text-sm text-gray-900">{s.product_name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{s.detected}</p>
+                      <p className="text-xs font-semibold text-gray-600 mt-1">{s.reason}</p>
+                      <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{s.action}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -207,9 +207,6 @@ function buildDailySeries(dailyQuantities: { [date: string]: number }, windowDay
 // historical series, scoring each day's forecast against that day's actual
 // sales as it becomes known (this is the "verify accuracy against new data"
 // step), then return the next-day forecast plus the accuracy score.
-
-
-// function runExponentialSmoothing(series: number[]): { REMEMBER TO CHANGE THIS BACK PLEASE 
 export function runExponentialSmoothing(series: number[]): {
   nextForecast: number
   mape: number | null
@@ -398,6 +395,250 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
     .filter(day => unitsByDay[day])
     .map(day => ({ day, avgUnitsSold: Math.round(unitsByDay[day] / occurrencesByDay[day]) }))
     .sort((a, b) => b.avgUnitsSold - a.avgUnitsSold)
+}
+
+// =============================================
+// PRODUCTION RECOMMENDATIONS
+// =============================================
+
+const PRODUCTION_WINDOW_DAYS = 7
+// Gap between demand and production must be at least this % before we
+// bother recommending a change — avoids flagging normal day-to-day noise.
+const PRODUCTION_GAP_THRESHOLD_PCT = 0.15
+const MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL = 2
+
+export interface ProductionRecommendation {
+  product_name: string
+  avg_daily_demand: number
+  avg_daily_production: number
+  direction: 'increase' | 'decrease'
+  recommended_change: number
+  detected: string
+  reason: string
+  action: string
+}
+
+export async function getProductionRecommendations(): Promise<ProductionRecommendation[]> {
+  const { data: products, error: productsError } = await supabase
+    .from('products')
+    .select('id, name')
+    .eq('is_archived', false)
+  if (productsError) throw productsError
+
+  const windowStart = new Date()
+  windowStart.setDate(windowStart.getDate() - PRODUCTION_WINDOW_DAYS)
+
+  const [{ data: saleItems, error: salesErr }, { data: productionRecords, error: prodErr }] = await Promise.all([
+    supabase
+      .from('sale_items')
+      .select(`product_id, quantity, sales!inner (sale_date)`)
+      .eq('sales.is_voided', false)
+      .gte('sales.sale_date', windowStart.toISOString()),
+    supabase
+      .from('production')
+      .select('product_id, quantity_produced, production_date')
+      .eq('is_voided', false)
+      .gte('production_date', windowStart.toISOString()),
+  ])
+  if (salesErr) throw salesErr
+  if (prodErr) throw prodErr
+
+  const demandByProduct: { [id: string]: number } = {}
+  ;(saleItems || []).forEach((item: any) => {
+    demandByProduct[item.product_id] = (demandByProduct[item.product_id] || 0) + item.quantity
+  })
+
+  const producedByProduct: { [id: string]: number } = {}
+  ;(productionRecords || []).forEach((rec: any) => {
+    producedByProduct[rec.product_id] = (producedByProduct[rec.product_id] || 0) + rec.quantity_produced
+  })
+
+  return (products || [])
+    .map(product => {
+      const totalDemand = demandByProduct[product.id] || 0
+      const totalProduced = producedByProduct[product.id] || 0
+      const avgDailyDemand = Math.round((totalDemand / PRODUCTION_WINDOW_DAYS) * 10) / 10
+      const avgDailyProduction = Math.round((totalProduced / PRODUCTION_WINDOW_DAYS) * 10) / 10
+
+      // Skip products with too little activity either way — nothing meaningful to recommend
+      if (avgDailyDemand < MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL && avgDailyProduction < MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL) return null
+
+      const gap = avgDailyDemand - avgDailyProduction
+      const gapPct = avgDailyProduction > 0 ? Math.abs(gap) / avgDailyProduction : (avgDailyDemand > 0 ? 1 : 0)
+
+      if (gapPct < PRODUCTION_GAP_THRESHOLD_PCT) return null
+
+      const direction: 'increase' | 'decrease' = gap > 0 ? 'increase' : 'decrease'
+      const recommendedChange = Math.max(1, Math.round(Math.abs(gap)))
+
+      return {
+        product_name: product.name,
+        avg_daily_demand: avgDailyDemand,
+        avg_daily_production: avgDailyProduction,
+        direction,
+        recommended_change: recommendedChange,
+        detected: `${product.name} averages ${avgDailyDemand} units/day in sales vs ${avgDailyProduction} units/day in production over the last ${PRODUCTION_WINDOW_DAYS} days.`,
+        reason: direction === 'increase'
+          ? `Demand is outpacing production by ${Math.round(gapPct * 100)}%, risking stockouts if this continues.`
+          : `Production is outpacing demand by ${Math.round(gapPct * 100)}%, risking excess stock and potential waste.`,
+        action: direction === 'increase'
+          ? `Increase daily production by ${recommendedChange} unit${recommendedChange !== 1 ? 's' : ''}.`
+          : `Decrease daily production by ${recommendedChange} unit${recommendedChange !== 1 ? 's' : ''}.`,
+      }
+    })
+    .filter((r): r is ProductionRecommendation => r !== null)
+    .sort((a, b) => Math.abs(b.avg_daily_demand - b.avg_daily_production) - Math.abs(a.avg_daily_demand - a.avg_daily_production))
+}
+
+// =============================================
+// WASTE REDUCTION RECOMMENDATIONS
+// =============================================
+
+const WASTE_WINDOW_DAYS = 7
+const WASTE_MIN_UNITS = 5
+// Waste must be at least this share of what was produced in the same
+// window to count as "excessive" rather than normal shrinkage.
+const WASTE_PRODUCTION_PCT_THRESHOLD = 0.15
+
+export interface WasteRecommendation {
+  product_name: string
+  pullout_quantity: number
+  oth_quantity: number
+  total_disposal_quantity: number
+  disposal_value: number
+  production_quantity_in_window: number
+  waste_pct_of_production: number | null
+  recommended_daily_reduction: number
+  detected: string
+  reason: string
+  action: string
+}
+
+export async function getWasteReductionRecommendations(): Promise<WasteRecommendation[]> {
+  const windowStart = new Date()
+  windowStart.setDate(windowStart.getDate() - WASTE_WINDOW_DAYS)
+
+  const [{ data: disposals, error: dispErr }, { data: productionRecords, error: prodErr }] = await Promise.all([
+    supabase
+      .from('stock_disposals')
+      .select('product_id, type, quantity, created_at, products (name, price)')
+      .gte('created_at', windowStart.toISOString()),
+    supabase
+      .from('production')
+      .select('product_id, quantity_produced')
+      .eq('is_voided', false)
+      .gte('production_date', windowStart.toISOString()),
+  ])
+  if (dispErr) throw dispErr
+  if (prodErr) throw prodErr
+
+  const producedByProduct: { [id: string]: number } = {}
+  ;(productionRecords || []).forEach((rec: any) => {
+    producedByProduct[rec.product_id] = (producedByProduct[rec.product_id] || 0) + rec.quantity_produced
+  })
+
+  const disposalMap: { [id: string]: { name: string; pullout: number; oth: number; value: number } } = {}
+  ;(disposals || []).forEach((d: any) => {
+    if (!disposalMap[d.product_id]) {
+      disposalMap[d.product_id] = { name: d.products?.name || 'Unknown', pullout: 0, oth: 0, value: 0 }
+    }
+    const entry = disposalMap[d.product_id]
+    if (d.type === 'pullout') entry.pullout += d.quantity
+    else entry.oth += d.quantity
+    entry.value += (d.products?.price || 0) * d.quantity
+  })
+
+  return Object.entries(disposalMap)
+    .map(([productId, d]) => {
+      const totalDisposal = d.pullout + d.oth
+      const producedInWindow = producedByProduct[productId] || 0
+      const wastePct = producedInWindow > 0 ? totalDisposal / producedInWindow : null
+
+      const isExcessive = totalDisposal >= WASTE_MIN_UNITS &&
+        (wastePct === null ? true : wastePct >= WASTE_PRODUCTION_PCT_THRESHOLD)
+      if (!isExcessive) return null
+
+      const recommendedDailyReduction = Math.max(1, Math.round(totalDisposal / WASTE_WINDOW_DAYS))
+
+      return {
+        product_name: d.name,
+        pullout_quantity: d.pullout,
+        oth_quantity: d.oth,
+        total_disposal_quantity: totalDisposal,
+        disposal_value: d.value,
+        production_quantity_in_window: producedInWindow,
+        waste_pct_of_production: wastePct !== null ? Math.round(wastePct * 100) : null,
+        recommended_daily_reduction: recommendedDailyReduction,
+        detected: `${d.name} had ${totalDisposal} unit${totalDisposal !== 1 ? 's' : ''} disposed (${d.pullout} pull-out${d.pullout !== 1 ? 's' : ''}, ${d.oth} on-the-house) over the last ${WASTE_WINDOW_DAYS} days.`,
+        reason: wastePct !== null
+          ? `That's ${Math.round(wastePct * 100)}% of the ${producedInWindow} units produced in the same period — consistently high waste.`
+          : `₱${d.value.toFixed(2)} in value was lost with no matching production logged in this window.`,
+        action: `Consider reducing daily production by ${recommendedDailyReduction} unit${recommendedDailyReduction !== 1 ? 's' : ''}.`,
+      }
+    })
+    .filter((r): r is WasteRecommendation => r !== null)
+    .sort((a, b) => b.total_disposal_quantity - a.total_disposal_quantity)
+}
+
+// =============================================
+// SLOW-MOVING PRODUCT RECOMMENDATIONS
+// =============================================
+
+const SLOW_MOVING_WINDOW_DAYS = 7
+const SLOW_MOVING_MAX_UNITS = 10
+
+export interface SlowMovingRecommendation {
+  product_name: string
+  units_sold: number
+  window_days: number
+  detected: string
+  reason: string
+  action: string
+}
+
+export async function getSlowMovingRecommendations(): Promise<SlowMovingRecommendation[]> {
+  const { data: products, error: productsError } = await supabase
+    .from('products')
+    .select('id, name, created_at')
+    .eq('is_archived', false)
+  if (productsError) throw productsError
+
+  const windowStart = new Date()
+  windowStart.setDate(windowStart.getDate() - SLOW_MOVING_WINDOW_DAYS)
+
+  const { data: saleItems, error: itemsError } = await supabase
+    .from('sale_items')
+    .select(`product_id, quantity, sales!inner (sale_date)`)
+    .eq('sales.is_voided', false)
+    .gte('sales.sale_date', windowStart.toISOString())
+  if (itemsError) throw itemsError
+
+  const soldByProduct: { [id: string]: number } = {}
+  ;(saleItems || []).forEach((item: any) => {
+    soldByProduct[item.product_id] = (soldByProduct[item.product_id] || 0) + item.quantity
+  })
+
+  return (products || [])
+    // A brand-new product with 0 sales on day one isn't "slow-moving" —
+    // it just hasn't had a fair shot in this window yet.
+    .filter(product => new Date(product.created_at) <= windowStart)
+    .map(product => {
+      const unitsSold = soldByProduct[product.id] || 0
+      if (unitsSold > SLOW_MOVING_MAX_UNITS) return null
+
+      return {
+        product_name: product.name,
+        units_sold: unitsSold,
+        window_days: SLOW_MOVING_WINDOW_DAYS,
+        detected: `${product.name} sold only ${unitsSold} unit${unitsSold !== 1 ? 's' : ''} in the last ${SLOW_MOVING_WINDOW_DAYS} days.`,
+        reason: `That's at or below ${SLOW_MOVING_MAX_UNITS} units/week, suggesting weak demand.`,
+        action: unitsSold === 0
+          ? `Consider pausing production and reviewing whether this product should continue to be offered.`
+          : `Consider reducing production, running a promotion, or reviewing whether this product should continue to be produced.`,
+      }
+    })
+    .filter((r): r is SlowMovingRecommendation => r !== null)
+    .sort((a, b) => a.units_sold - b.units_sold)
 }
 
 // =============================================
