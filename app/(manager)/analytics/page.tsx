@@ -13,10 +13,8 @@ import {
   exportExpensesToCSV,
   getDisposalAnalytics,
   getWeeklyBreakdown,
-  getDailySalesBreakdown, //watch
-  getProductionRecommendations,
-  getWasteReductionRecommendations,
-  getSlowMovingRecommendations,
+  getDailySalesBreakdown,
+  getPrescriptiveRecommendations,
   type DisposalAnalytics,
   type WeeklyBreakdown,
   type SalesSummary,
@@ -24,10 +22,10 @@ import {
   type RestockRecommendation,
   type SalesTrend,
   type BestSellingDay,
-  type DailySalesBreakdown, //watch
-  type ProductionRecommendation,
-  type WasteRecommendation,
-  type SlowMovingRecommendation,
+  type DailySalesBreakdown,
+  type PrescriptiveRecommendation,
+  type RecommendationPriority,
+  type RecommendationType,
 } from '@/lib/analytics'
 import {
   BarChart, Bar, ComposedChart, Area, Cell, Line, LineChart,
@@ -161,6 +159,137 @@ function WeeklyTooltip({ active, payload, label }: any) {
   )
 }
 
+// ─── PRESCRIPTIVE RECOMMENDATION CARD ───────────────────────────
+
+const PRIORITY_STYLES: Record<RecommendationPriority, {
+  badge: string
+  border: string
+  bg: string
+  dot: string
+}> = {
+  high: {
+    badge: 'bg-red-100 text-red-700',
+    border: 'border-red-200',
+    bg: 'bg-red-50',
+    dot: 'bg-red-500',
+  },
+  medium: {
+    badge: 'bg-yellow-100 text-yellow-800',
+    border: 'border-yellow-200',
+    bg: 'bg-yellow-50',
+    dot: 'bg-yellow-500',
+  },
+  low: {
+    badge: 'bg-gray-100 text-gray-600',
+    border: 'border-gray-200',
+    bg: 'bg-gray-50',
+    dot: 'bg-gray-400',
+  },
+}
+
+const TYPE_LABELS: Record<RecommendationType, string> = {
+  production: 'Production',
+  waste: 'Waste Reduction',
+  slow_moving: 'Slow-Moving Product',
+  conflict: 'Conflict / Review',
+}
+
+function formatMetricValue(value: number | string | null): string {
+  if (value === null) return '—'
+  return String(value)
+}
+
+function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
+  const styles = PRIORITY_STYLES[rec.priority]
+  const isConflict = rec.type === 'conflict'
+
+  return (
+    <div
+      className={`rounded-sm border ${styles.border} ${isConflict ? 'bg-white' : styles.bg} overflow-hidden`}
+      style={{
+        boxShadow: isConflict
+          ? '0 0 0 2px #dc2626, 0 4px 16px rgba(220,38,38,0.12)'
+          : '0 2px 8px rgba(0,0,0,0.06)',
+      }}
+    >
+      {/* Card header */}
+      <div
+        className={`px-4 py-3 flex items-center gap-2 flex-wrap ${
+          isConflict ? 'bg-red-700' : 'border-b ' + styles.border
+        }`}
+      >
+        {/* Priority badge */}
+        <span
+          className={`text-xs font-black px-2 py-0.5 rounded-sm tracking-wide ${
+            isConflict
+              ? 'bg-red-900 text-red-200'
+              : styles.badge
+          }`}
+        >
+          {rec.priority.toUpperCase()}
+        </span>
+
+        {/* Type label */}
+        <span
+          className={`text-xs font-semibold px-2 py-0.5 rounded-sm ${
+            isConflict
+              ? 'bg-red-800 text-red-100'
+              : 'bg-white text-gray-500 border border-gray-200'
+          }`}
+        >
+          {TYPE_LABELS[rec.type]}
+        </span>
+
+        {/* Product name */}
+        <span className={`ml-auto text-sm font-black ${isConflict ? 'text-white' : 'text-gray-800'}`}>
+          {rec.productName}
+        </span>
+      </div>
+
+      {/* Card body */}
+      <div className="px-4 py-4">
+        {/* Title */}
+        <p className={`font-black text-base mb-2 ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+          {rec.title}
+        </p>
+
+        {/* Metrics */}
+        {Object.keys(rec.metrics).length > 0 && (
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mb-3">
+            {Object.entries(rec.metrics).map(([key, val]) => (
+              <div key={key} className="flex items-baseline gap-1">
+                <span className="text-xs text-gray-400 font-semibold">{key}:</span>
+                <span className="text-xs font-black text-gray-700">{formatMetricValue(val)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Why */}
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-gray-400 mb-0.5">Why</p>
+          <p className="text-sm text-gray-600 leading-relaxed">{rec.reason}</p>
+        </div>
+
+        {/* Recommended action */}
+        <div
+          className={`px-3 py-2.5 rounded-sm border-l-4 ${
+            isConflict
+              ? 'bg-red-50 border-red-400'
+              : 'bg-white border-yellow-400'
+          }`}
+          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+        >
+          <p className="text-xs font-semibold text-gray-400 mb-0.5">Recommended Action</p>
+          <p className={`text-sm font-black ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+            {rec.recommendedAction}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MAIN PAGE ───────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
@@ -177,21 +306,20 @@ export default function AnalyticsPage() {
   const [drilldownMonth, setDrilldownMonth] = useState<{ label: string; year: number; month: number } | null>(null)
   const [weeklyData, setWeeklyData] = useState<WeeklyBreakdown[]>([])
   const [drilldownLoading, setDrilldownLoading] = useState(false)
-  const [dailyDate, setDailyDate] = useState<string>(() => new Date().toISOString().split('T')[0]) //watch
-  const [dailyData, setDailyData] = useState<DailySalesBreakdown | null>(null) //watch
-  const [dailyLoading, setDailyLoading] = useState(false) //watch
-  const [dailyError, setDailyError] = useState('') //watch
-  const [productionRecs, setProductionRecs] = useState<ProductionRecommendation[]>([])
-  const [wasteRecs, setWasteRecs] = useState<WasteRecommendation[]>([])
-  const [slowMovingRecs, setSlowMovingRecs] = useState<SlowMovingRecommendation[]>([])
+  const [dailyDate, setDailyDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [dailyData, setDailyData] = useState<DailySalesBreakdown | null>(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
+  const [dailyError, setDailyError] = useState('')
+
+  // New unified prescriptive state
+  const [prescriptiveRecs, setPrescriptiveRecs] = useState<PrescriptiveRecommendation[]>([])
+  const [prescriptiveLoading, setPrescriptiveLoading] = useState(true)
+  const [prescriptiveError, setPrescriptiveError] = useState('')
 
   useEffect(() => { checkAuthAndLoad() }, [])
   useEffect(() => { if (!loading) loadSummary() }, [period])
-  useEffect(() => { if (!loading) loadDailyBreakdown(dailyDate) }, [dailyDate, loading]) //watch
+  useEffect(() => { if (!loading) loadDailyBreakdown(dailyDate) }, [dailyDate, loading])
 
-  // Recommendations are derived from sales, production, and disposal activity —
-  // refresh them automatically whenever any of that data changes, so managers
-  // never act on a stale recommendation.
   useRealtimeRefresh(['sale_items', 'sales', 'production', 'stock_disposals', 'products'], loadPrescriptive)
 
   async function checkAuthAndLoad() {
@@ -224,20 +352,23 @@ export default function AnalyticsPage() {
   }
 
   async function loadPrescriptive() {
+    setPrescriptiveLoading(true)
+    setPrescriptiveError('')
     try {
-      const [recommendationsData, bestDaysData, productionData, wasteData, slowMovingData] = await Promise.all([
+      const [restockData, bestDaysData, opRecs] = await Promise.all([
         getRestockRecommendations(),
         getBestSellingDays(),
-        getProductionRecommendations(),
-        getWasteReductionRecommendations(),
-        getSlowMovingRecommendations(),
+        getPrescriptiveRecommendations(),
       ])
-      setRecommendations(recommendationsData)
+      setRecommendations(restockData)
       setBestDays(bestDaysData)
-      setProductionRecs(productionData)
-      setWasteRecs(wasteData)
-      setSlowMovingRecs(slowMovingData)
-    } catch {}
+      // Backend already sorts by priority; preserve that order
+      setPrescriptiveRecs(opRecs)
+    } catch {
+      setPrescriptiveError('Unable to load operational recommendations. Please try refreshing.')
+    } finally {
+      setPrescriptiveLoading(false)
+    }
   }
 
   function handleExportSales() {
@@ -260,22 +391,20 @@ export default function AnalyticsPage() {
     finally { setDrilldownLoading(false) }
   }
 
-  async function loadDailyBreakdown(dateStr: string) { //watch
-  setDailyLoading(true)
-  setDailyError('')
-  try {
-    const data = await getDailySalesBreakdown(new Date(dateStr))
-    setDailyData(data)
-  } catch {
-    setDailyError('Failed to load daily sales data.')
-  } finally {
-    setDailyLoading(false)
+  async function loadDailyBreakdown(dateStr: string) {
+    setDailyLoading(true)
+    setDailyError('')
+    try {
+      const data = await getDailySalesBreakdown(new Date(dateStr))
+      setDailyData(data)
+    } catch {
+      setDailyError('Failed to load daily sales data.')
+    } finally {
+      setDailyLoading(false)
+    }
   }
-} // watch
-
 
   const handleLogout = async () => { await signOut(); router.push('/login') }
-
 
   const periodButtons: { key: Period; label: string }[] = [
     { key: 'today', label: 'Today' },
@@ -306,6 +435,11 @@ export default function AnalyticsPage() {
 
   const activeMonths = expenseData.filter(d => d.revenue > 0 || d.expenses > 0)
 
+  // Partition recs: conflict first (already sorted high→low by backend, but conflicts are always high)
+  const conflictRecs = prescriptiveRecs.filter(r => r.type === 'conflict')
+  const nonConflictRecs = prescriptiveRecs.filter(r => r.type !== 'conflict')
+  const hasOperationalRecs = prescriptiveRecs.length > 0
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
 
@@ -328,7 +462,7 @@ export default function AnalyticsPage() {
         <LogoWatermark />
 
         {/* SIDEBAR */}
-      <ManagerSidebar />
+        <ManagerSidebar />
 
         {/* MAIN CONTENT */}
         <div className="relative z-10 flex-1 p-6 overflow-y-auto">
@@ -646,130 +780,132 @@ export default function AnalyticsPage() {
             </div>
           )}
 
+          {/* ── DAILY SALES BREAKDOWN ── */}
+          <h2 className="text-2xl font-black text-gray-900 mb-4">Daily Sales Breakdown</h2>
 
-<h2 className="text-2xl font-black text-gray-900 mb-4">Daily Sales Breakdown</h2>
-
-  <div className="bg-white rounded-sm p-4 mb-4 flex items-center gap-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
-    <label className="text-xs font-bold text-gray-500">Select Date</label>
-    <input
-      type="date"
-      value={dailyDate}
-      max={new Date().toISOString().split('T')[0]}
-      onChange={e => setDailyDate(e.target.value)}
-      className="text-sm font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900"
-    />
-    <span className="text-xs text-gray-400 font-semibold">
-      {new Date(dailyDate).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-    </span>
-  </div>
-
-  {dailyError && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{dailyError}</div>}
-
-  {dailyLoading ? (
-    <div className="bg-white rounded-sm flex items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
-      <p className="text-gray-400 font-semibold text-sm">Loading...</p>
-    </div>
-  ) : dailyData ? (
-    <>
-   
-      <div className="grid grid-cols-4 gap-4 mb-4">
-        <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Revenue</p>
-          <p className="text-2xl font-black text-white">₱{dailyData.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-          <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalTransactions} transaction{dailyData.totalTransactions !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Cash</p>
-          <p className="text-2xl font-black text-green-400">₱{dailyData.cashRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-          <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.cashRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
-        </div>
-        <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Online</p>
-          <p className="text-2xl font-black text-blue-400">₱{dailyData.onlineRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
-          <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.onlineRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
-        </div>
-        <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-          <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Voided</p>
-          <p className="text-2xl font-black text-red-400">{dailyData.voidedCount}</p>
-          <p className="text-white text-xs opacity-50 mt-1">₱{dailyData.voidedRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} lost</p>
-        </div>
-      </div>
-
-      
-      {dailyData.items.length === 0 ? (
-        <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-          <div className="text-5xl mb-3"></div>
-          <p className="text-lg font-bold text-gray-600">No sales on this day</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-          <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
-            <span className="text-white text-lg">🧁</span>
-            <h2 className="font-bold text-white">Items Sold</h2>
-            <span className="ml-auto text-xs text-white opacity-60">{dailyData.items.length} product{dailyData.items.length !== 1 ? 's' : ''}</span>
+          <div className="bg-white rounded-sm p-4 mb-4 flex items-center gap-4" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+            <label className="text-xs font-bold text-gray-500">Select Date</label>
+            <input
+              type="date"
+              value={dailyDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e => setDailyDate(e.target.value)}
+              className="text-sm font-semibold px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900"
+            />
+            <span className="text-xs text-gray-400 font-semibold">
+              {new Date(dailyDate).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </span>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                <th className="px-5 py-3 font-semibold">Rank</th>
-                <th className="px-5 py-3 font-semibold">Product</th>
-                <th className="px-5 py-3 font-semibold text-center">Qty Sold</th>
-                <th className="px-5 py-3 font-semibold text-right">Revenue</th>
-                <th className="px-5 py-3 font-semibold text-right">% of Day</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dailyData.items.map((item, index) => {
-                const pct = dailyData.totalRevenue > 0 ? ((item.revenue / dailyData.totalRevenue) * 100).toFixed(1) : '0'
-                return (
-                  <tr key={item.product_name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-3 text-xs font-black" style={{ color: index === 0 ? '#F5A623' : '#9ca3af' }}>
-                      #{index + 1}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold text-gray-800">{item.product_name}</td>
-                    <td className="px-5 py-3 text-sm font-black text-gray-700 text-center">{item.quantity}</td>
-                    <td className="px-5 py-3 text-sm font-black text-gray-900 text-right">
-                      ₱{item.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: '#7B1111' }} />
-                        </div>
-                        <span className="text-xs text-gray-400 font-semibold w-8">{pct}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50 border-t border-gray-200">
-                <td colSpan={2} className="px-5 py-3 text-xs font-bold text-gray-700">Total</td>
-                <td className="px-5 py-3 text-sm font-black text-gray-900 text-center">
-                  {dailyData.items.reduce((sum, i) => sum + i.quantity, 0)} pcs
-                </td>
-                <td className="px-5 py-3 text-sm font-black text-gray-900 text-right">
-                  ₱{dailyData.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </>
-  ) : null}
-<br />
+
+          {dailyError && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{dailyError}</div>}
+
+          {dailyLoading ? (
+            <div className="bg-white rounded-sm flex items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
+              <p className="text-gray-400 font-semibold text-sm">Loading...</p>
+            </div>
+          ) : dailyData ? (
+            <>
+              <div className="grid grid-cols-4 gap-4 mb-4">
+                <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                  <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Revenue</p>
+                  <p className="text-2xl font-black text-white">₱{dailyData.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalTransactions} transaction{dailyData.totalTransactions !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                  <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Cash</p>
+                  <p className="text-2xl font-black text-green-400">₱{dailyData.cashRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.cashRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
+                </div>
+                <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                  <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Online</p>
+                  <p className="text-2xl font-black text-blue-400">₱{dailyData.onlineRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-white text-xs opacity-50 mt-1">{dailyData.totalRevenue > 0 ? ((dailyData.onlineRevenue / dailyData.totalRevenue) * 100).toFixed(0) : 0}% of total</p>
+                </div>
+                <div className="rounded-sm p-5" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+                  <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Voided</p>
+                  <p className="text-2xl font-black text-red-400">{dailyData.voidedCount}</p>
+                  <p className="text-white text-xs opacity-50 mt-1">₱{dailyData.voidedRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} lost</p>
+                </div>
+              </div>
+
+              {dailyData.items.length === 0 ? (
+                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="text-5xl mb-3"></div>
+                  <p className="text-lg font-bold text-gray-600">No sales on this day</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+                  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#1a2340' }}>
+                    <span className="text-white text-lg">🧁</span>
+                    <h2 className="font-bold text-white">Items Sold</h2>
+                    <span className="ml-auto text-xs text-white opacity-60">{dailyData.items.length} product{dailyData.items.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                        <th className="px-5 py-3 font-semibold">Rank</th>
+                        <th className="px-5 py-3 font-semibold">Product</th>
+                        <th className="px-5 py-3 font-semibold text-center">Qty Sold</th>
+                        <th className="px-5 py-3 font-semibold text-right">Revenue</th>
+                        <th className="px-5 py-3 font-semibold text-right">% of Day</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyData.items.map((item, index) => {
+                        const pct = dailyData.totalRevenue > 0 ? ((item.revenue / dailyData.totalRevenue) * 100).toFixed(1) : '0'
+                        return (
+                          <tr key={item.product_name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td className="px-5 py-3 text-xs font-black" style={{ color: index === 0 ? '#F5A623' : '#9ca3af' }}>
+                              #{index + 1}
+                            </td>
+                            <td className="px-5 py-3 text-sm font-semibold text-gray-800">{item.product_name}</td>
+                            <td className="px-5 py-3 text-sm font-black text-gray-700 text-center">{item.quantity}</td>
+                            <td className="px-5 py-3 text-sm font-black text-gray-900 text-right">
+                              ₱{item.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: '#7B1111' }} />
+                                </div>
+                                <span className="text-xs text-gray-400 font-semibold w-8">{pct}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 border-t border-gray-200">
+                        <td colSpan={2} className="px-5 py-3 text-xs font-bold text-gray-700">Total</td>
+                        <td className="px-5 py-3 text-sm font-black text-gray-900 text-center">
+                          {dailyData.items.reduce((sum, i) => sum + i.quantity, 0)} pcs
+                        </td>
+                        <td className="px-5 py-3 text-sm font-black text-gray-900 text-right">
+                          ₱{dailyData.totalRevenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </>
+          ) : null}
+
+          <br />
+
           {/* ── PRESCRIPTIVE ANALYTICS ── */}
           <div className="mb-5">
-            <h2 className="text-2xl font-black text-gray-900 mb-4">Prescriptive Analytics</h2>
+            <h2 className="text-2xl font-black text-gray-900 mb-1">Prescriptive Analytics</h2>
+            <p className="text-sm text-gray-600 mb-5">What happened → Why it matters → What the system recommends doing.</p>
 
+            {/* Revenue Trend */}
             {trend && (
               <div className={`rounded-sm p-5 mb-5 ${trend.trend === 'up' ? 'bg-green-50' : trend.trend === 'down' ? 'bg-red-50' : 'bg-white'}`}
                 style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.15)' }}>
                 <div className="flex items-center gap-4">
-                  <span className="text-4xl">{trend.trend === 'up' ? '' : trend.trend === 'down' ? '' : ''}</span>
+                  <span className="text-4xl">{trend.trend === 'up' ? '📈' : trend.trend === 'down' ? '📉' : '➡️'}</span>
                   <div className="flex-1">
                     <p className="font-black text-gray-900 text-lg">
                       Revenue is {trend.trend === 'up' ? 'trending up' : trend.trend === 'down' ? 'trending down' : 'stable'}
@@ -788,7 +924,8 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-5">
+            {/* Restock + Best Days */}
+            <div className="grid grid-cols-2 gap-5 mb-5">
               <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
@@ -797,7 +934,7 @@ export default function AnalyticsPage() {
                 <p className="text-xs text-gray-400 mb-4">Forecasted demand, verified against actual sales, prescribing a restock action.</p>
                 {recommendations.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
-                    <div className="text-4xl mb-2"></div>
+                    <div className="text-4xl mb-2">✅</div>
                     <p className="text-sm">Nothing needs restocking right now.</p>
                   </div>
                 ) : (
@@ -810,9 +947,9 @@ export default function AnalyticsPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="font-semibold text-sm text-gray-900 flex items-center gap-1">
-                              {p.urgency === 'critical' && <span></span>}
-                              {p.urgency === 'warning' && <span></span>}
-                              {p.urgency === 'ok' && <span></span>}
+                              {p.urgency === 'critical' && <span>🔴</span>}
+                              {p.urgency === 'warning' && <span>🟡</span>}
+                              {p.urgency === 'ok' && <span>🟢</span>}
                               {p.product_name}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">
@@ -856,7 +993,7 @@ export default function AnalyticsPage() {
                 <p className="text-xs text-gray-400 mb-4">Based on avg units sold per day over the last 30 days.</p>
                 {bestDays.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
-                    <div className="text-4xl mb-2"></div>
+                    <div className="text-4xl mb-2">📊</div>
                     <p className="text-sm">Not enough sales data yet.</p>
                   </div>
                 ) : (
@@ -867,7 +1004,7 @@ export default function AnalyticsPage() {
                         <div key={d.day}>
                           <div className="flex justify-between text-xs font-semibold mb-1">
                             <span className="text-gray-700">
-                              {index === 0 ? ' ' : index === 1 ? ' ' : index === 2 ? ' ' : '    '}{d.day}
+                              {index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '    '}{d.day}
                             </span>
                             <span className="text-gray-500">{d.avgUnitsSold.toLocaleString('en-PH')} pcs avg</span>
                           </div>
@@ -877,99 +1014,86 @@ export default function AnalyticsPage() {
                         </div>
                       )
                     })}
-                    {/* <p className="text-xs text-gray-400 mt-2">💡 Stock up the day before your busiest days!</p> */}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* ── PRODUCTION & WASTE RECOMMENDATIONS ── */}
-            <div className="grid grid-cols-2 gap-5 mt-5">
-              <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                <div className="flex items-center gap-2 mb-1">
+            {/* ── OPERATIONAL RECOMMENDATIONS (new unified section) ── */}
+            <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+              <div className="px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-0.5">
                   <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
-                  <h3 className="font-black text-gray-900">Production Recommendations</h3>
+                  <h3 className="font-black text-gray-900">Operational Recommendations</h3>
+                  {!prescriptiveLoading && hasOperationalRecs && (
+                    <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                      {prescriptiveRecs.length} recommendation{prescriptiveRecs.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-gray-400 mb-4">Comparing average daily sales demand against average daily production over the last 7 days.</p>
-                {productionRecs.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <p className="text-sm">Production levels look aligned with demand right now.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {productionRecs.map(p => (
-                      <div key={p.product_name} className={`p-4 rounded-sm border ${
-                        p.direction === 'increase' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
-                      }`}>
-                        <p className="font-semibold text-sm text-gray-900">{p.product_name}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{p.detected}</p>
-                        <p className={`text-xs font-semibold mt-1 ${p.direction === 'increase' ? 'text-red-600' : 'text-yellow-700'}`}>{p.reason}</p>
-                        <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{p.action}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p className="text-xs text-gray-400">
+                  Production, waste reduction, slow-moving products, and conflict signals — based on the last 7 days.
+                </p>
               </div>
 
-              <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
-                  <h3 className="font-black text-gray-900">Waste Reduction Recommendations</h3>
-                </div>
-                <p className="text-xs text-gray-400 mb-4">Products with consistently high pull-outs or on-the-house disposals over the last 7 days.</p>
-                {wasteRecs.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <p className="text-sm">No excessive waste detected this week.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {wasteRecs.map(w => (
-                      <div key={w.product_name} className="p-4 rounded-sm border bg-red-50 border-red-200">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="font-semibold text-sm text-gray-900">{w.product_name}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{w.detected}</p>
-                            <p className="text-xs font-semibold text-red-600 mt-1">{w.reason}</p>
-                          </div>
-                          <p className="text-sm font-black text-red-600 shrink-0">₱{w.disposal_value.toFixed(2)}</p>
-                        </div>
-                        <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{w.action}</p>
-                      </div>
-                    ))}
+              <div className="p-6">
+                {/* Loading state */}
+                {prescriptiveLoading && (
+                  <div className="flex items-center justify-center py-12 gap-3">
+                    <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
+                    <p className="text-sm text-gray-400 font-semibold">Analyzing production and waste data…</p>
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* ── SLOW-MOVING PRODUCTS ── */}
-            <div className="bg-white rounded-sm p-6 mt-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-              <div className="flex items-center gap-2 mb-1">
-                <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
-                <h3 className="font-black text-gray-900">Slow-Moving Product Recommendations</h3>
-              </div>
-              <p className="text-xs text-gray-400 mb-4">Products selling {`\u2264`}10 units over the last 7 days.</p>
-              {slowMovingRecs.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <p className="text-sm">No slow-moving products right now.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {slowMovingRecs.map(s => (
-                    <div key={s.product_name} className={`p-4 rounded-sm border ${s.units_sold === 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                      <p className="font-semibold text-sm text-gray-900">{s.product_name}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{s.detected}</p>
-                      <p className="text-xs font-semibold text-gray-600 mt-1">{s.reason}</p>
-                      <p className="text-sm font-black mt-1" style={{ color: '#F5A623' }}>{s.action}</p>
+                {/* Error state */}
+                {!prescriptiveLoading && prescriptiveError && (
+                  <div className="flex items-start gap-3 px-4 py-4 rounded-sm bg-red-50 border border-red-200">
+                    <span className="text-red-400 mt-0.5">⚠</span>
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">Could not load recommendations</p>
+                      <p className="text-xs text-red-500 mt-0.5">{prescriptiveError}</p>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!prescriptiveLoading && !prescriptiveError && !hasOperationalRecs && (
+                  <div className="text-center py-12">
+                    <div className="text-4xl mb-3">✅</div>
+                    <p className="text-base font-black text-gray-700">No new operational recommendations at this time.</p>
+                    <p className="text-sm text-gray-400 mt-1">Production, waste, and sales levels look balanced for the last 7 days.</p>
+                  </div>
+                )}
+
+                {/* Recommendations */}
+                {!prescriptiveLoading && !prescriptiveError && hasOperationalRecs && (
+                  <div className="space-y-4">
+                    {/* Conflict recommendations first — they are always high-priority and need immediate attention */}
+                    {conflictRecs.length > 0 && (
+                      <div className="space-y-4">
+                        <p className="text-xs font-bold text-red-600 flex items-center gap-1.5">
+                          <span>⚠</span> Conflicting signals require review before taking action
+                        </p>
+                        {conflictRecs.map(rec => (
+                          <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
+                        ))}
+                        {nonConflictRecs.length > 0 && (
+                          <div className="border-t border-gray-100 pt-4">
+                            <p className="text-xs font-bold text-gray-400 mb-4">Other recommendations</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Remaining recommendations in priority order (already sorted by backend) */}
+                    {nonConflictRecs.map(rec => (
+                      <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-
-          <div className="mb-5">
-  
-</div>
 
         </div>
       </div>

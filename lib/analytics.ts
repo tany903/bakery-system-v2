@@ -178,7 +178,7 @@ export async function getExpenseVsRevenue(): Promise<ExpenseVsRevenue[]> {
 }
 
 // =============================================
-// PRESCRIPTIVE ANALYTICS
+// PRESCRIPTIVE ANALYTICS — RESTOCK FORECAST
 // =============================================
 
 // Minimum number of days with at least one sale before we trust the forecast
@@ -398,27 +398,93 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
 }
 
 // =============================================
-// PRODUCTION RECOMMENDATIONS
+// PRESCRIPTIVE RECOMMENDATIONS (Production / Waste / Slow-Moving)
 // =============================================
 
-const PRODUCTION_WINDOW_DAYS = 7
-// Gap between demand and production must be at least this % before we
-// bother recommending a change — avoids flagging normal day-to-day noise.
+// All business thresholds live here, isolated from the logic that uses
+// them, so sensitivity can be tuned without touching the recommendation
+// rules themselves.
+const ANALYSIS_WINDOW_DAYS = 7
+const MIN_ACTIVITY_UNITS_PER_DAY = 2
 const PRODUCTION_GAP_THRESHOLD_PCT = 0.15
-const MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL = 2
+const PRODUCTION_HIGH_GAP_PCT = 0.40
+const WASTE_MIN_UNITS = 5
+const WASTE_THRESHOLD_PCT = 0.15
+const WASTE_HIGH_PCT = 0.30
 
-export interface ProductionRecommendation {
+// Zero-production-but-selling is always a real signal (there's no gap % to
+// grade it by), so it's graded on the demand itself instead. Below this,
+// it's "selling a little with nothing made" (medium); at/above, it's
+// "selling a lot with nothing made" (high).
+const ZERO_PRODUCTION_HIGH_DEMAND_UNITS_PER_DAY = 5
+
+// Zero-matching-production waste is an exception case, not a stricter
+// version of the normal rule — a tiny disposal with no production logged
+// usually just means someone forgot to log a small batch, not a real
+// waste problem, so it needs its own (deliberately stricter) gate.
+const ZERO_PRODUCTION_WASTE_MIN_UNITS = 5
+const ZERO_PRODUCTION_WASTE_MIN_VALUE = 500
+const ZERO_PRODUCTION_WASTE_HIGH_UNITS = 15
+const ZERO_PRODUCTION_WASTE_HIGH_VALUE = 1000
+
+const SLOW_MOVING_MAX_UNITS = 10
+
+export type RecommendationPriority = 'high' | 'medium' | 'low'
+export type RecommendationType = 'production' | 'waste' | 'slow_moving' | 'conflict'
+
+export interface PrescriptiveRecommendation {
+  type: RecommendationType
+  priority: RecommendationPriority
+  productId: string
+  productName: string
+  title: string
+  reason: string
+  metrics: Record<string, number | string | null>
+  recommendedAction: string
+}
+
+interface ProductionSignal {
+  product_id: string
   product_name: string
   avg_daily_demand: number
   avg_daily_production: number
+  gap_pct: number | null // null only for the zero-production case, graded on demand instead
   direction: 'increase' | 'decrease'
-  recommended_change: number
-  detected: string
-  reason: string
-  action: string
+  recommended_daily_production: number
+  priority: RecommendationPriority
 }
 
-export async function getProductionRecommendations(): Promise<ProductionRecommendation[]> {
+interface WasteSignal {
+  product_id: string
+  product_name: string
+  pullout_quantity: number
+  oth_quantity: number
+  total_disposal: number
+  disposal_value: number
+  production_quantity_in_window: number
+  waste_pct: number | null // null only when there was zero matching production, graded on volume/value instead
+  recommended_daily_reduction: number
+  priority: RecommendationPriority
+}
+
+function productionPriorityFromGap(gapPct: number): RecommendationPriority {
+  return gapPct >= PRODUCTION_HIGH_GAP_PCT ? 'high' : 'medium'
+}
+
+function productionPriorityFromZeroProduction(avgDailyDemand: number): RecommendationPriority {
+  return avgDailyDemand >= ZERO_PRODUCTION_HIGH_DEMAND_UNITS_PER_DAY ? 'high' : 'medium'
+}
+
+function wastePriorityFromPct(wastePct: number): RecommendationPriority {
+  return wastePct >= WASTE_HIGH_PCT ? 'high' : 'medium'
+}
+
+function wastePriorityFromZeroProduction(totalDisposal: number, disposalValue: number): RecommendationPriority {
+  return (totalDisposal >= ZERO_PRODUCTION_WASTE_HIGH_UNITS || disposalValue >= ZERO_PRODUCTION_WASTE_HIGH_VALUE)
+    ? 'high' : 'medium'
+}
+
+async function getProductionSignals(): Promise<Map<string, ProductionSignal>> {
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, name')
@@ -426,7 +492,7 @@ export async function getProductionRecommendations(): Promise<ProductionRecommen
   if (productsError) throw productsError
 
   const windowStart = new Date()
-  windowStart.setDate(windowStart.getDate() - PRODUCTION_WINDOW_DAYS)
+  windowStart.setDate(windowStart.getDate() - ANALYSIS_WINDOW_DAYS)
 
   const [{ data: saleItems, error: salesErr }, { data: productionRecords, error: prodErr }] = await Promise.all([
     supabase
@@ -436,7 +502,7 @@ export async function getProductionRecommendations(): Promise<ProductionRecommen
       .gte('sales.sale_date', windowStart.toISOString()),
     supabase
       .from('production')
-      .select('product_id, quantity_produced, production_date')
+      .select('product_id, quantity_produced')
       .eq('is_voided', false)
       .gte('production_date', windowStart.toISOString()),
   ])
@@ -453,75 +519,61 @@ export async function getProductionRecommendations(): Promise<ProductionRecommen
     producedByProduct[rec.product_id] = (producedByProduct[rec.product_id] || 0) + rec.quantity_produced
   })
 
-  return (products || [])
-    .map(product => {
-      const totalDemand = demandByProduct[product.id] || 0
-      const totalProduced = producedByProduct[product.id] || 0
-      const avgDailyDemand = Math.round((totalDemand / PRODUCTION_WINDOW_DAYS) * 10) / 10
-      const avgDailyProduction = Math.round((totalProduced / PRODUCTION_WINDOW_DAYS) * 10) / 10
+  const signals = new Map<string, ProductionSignal>()
 
-      // Skip products with too little activity either way — nothing meaningful to recommend
-      if (avgDailyDemand < MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL && avgDailyProduction < MIN_DAILY_UNITS_FOR_PRODUCTION_SIGNAL) return null
+  ;(products || []).forEach(product => {
+    const totalDemand = demandByProduct[product.id] || 0
+    const totalProduced = producedByProduct[product.id] || 0
+    const avgDailyDemand = Math.round((totalDemand / ANALYSIS_WINDOW_DAYS) * 10) / 10
+    const avgDailyProduction = Math.round((totalProduced / ANALYSIS_WINDOW_DAYS) * 10) / 10
 
-      const gap = avgDailyDemand - avgDailyProduction
-      const gapPct = avgDailyProduction > 0 ? Math.abs(gap) / avgDailyProduction : (avgDailyDemand > 0 ? 1 : 0)
-
-      if (gapPct < PRODUCTION_GAP_THRESHOLD_PCT) return null
-
-      const direction: 'increase' | 'decrease' = gap > 0 ? 'increase' : 'decrease'
-      const recommendedChange = Math.max(1, Math.round(Math.abs(gap)))
-
-      return {
+    if (avgDailyProduction === 0) {
+      // Zero production: only a signal if demand clears the activity floor —
+      // zero production of something nobody's buying isn't a problem.
+      if (avgDailyDemand < MIN_ACTIVITY_UNITS_PER_DAY) return
+      signals.set(product.id, {
+        product_id: product.id,
         product_name: product.name,
         avg_daily_demand: avgDailyDemand,
-        avg_daily_production: avgDailyProduction,
-        direction,
-        recommended_change: recommendedChange,
-        detected: `${product.name} averages ${avgDailyDemand} units/day in sales vs ${avgDailyProduction} units/day in production over the last ${PRODUCTION_WINDOW_DAYS} days.`,
-        reason: direction === 'increase'
-          ? `Demand is outpacing production by ${Math.round(gapPct * 100)}%, risking stockouts if this continues.`
-          : `Production is outpacing demand by ${Math.round(gapPct * 100)}%, risking excess stock and potential waste.`,
-        action: direction === 'increase'
-          ? `Increase daily production by ${recommendedChange} unit${recommendedChange !== 1 ? 's' : ''}.`
-          : `Decrease daily production by ${recommendedChange} unit${recommendedChange !== 1 ? 's' : ''}.`,
-      }
+        avg_daily_production: 0,
+        gap_pct: null,
+        direction: 'increase',
+        recommended_daily_production: Math.max(1, Math.ceil(avgDailyDemand)),
+        priority: productionPriorityFromZeroProduction(avgDailyDemand),
+      })
+      return
+    }
+
+    // Not enough activity either way to say anything meaningful
+    if (avgDailyDemand < MIN_ACTIVITY_UNITS_PER_DAY && avgDailyProduction < MIN_ACTIVITY_UNITS_PER_DAY) return
+
+    const gap = avgDailyDemand - avgDailyProduction
+    const gapPct = Math.abs(gap) / avgDailyProduction
+    if (gapPct < PRODUCTION_GAP_THRESHOLD_PCT) return
+
+    signals.set(product.id, {
+      product_id: product.id,
+      product_name: product.name,
+      avg_daily_demand: avgDailyDemand,
+      avg_daily_production: avgDailyProduction,
+      gap_pct: gapPct,
+      direction: gap > 0 ? 'increase' : 'decrease',
+      recommended_daily_production: Math.max(1, Math.ceil(avgDailyDemand)),
+      priority: productionPriorityFromGap(gapPct),
     })
-    .filter((r): r is ProductionRecommendation => r !== null)
-    .sort((a, b) => Math.abs(b.avg_daily_demand - b.avg_daily_production) - Math.abs(a.avg_daily_demand - a.avg_daily_production))
+  })
+
+  return signals
 }
 
-// =============================================
-// WASTE REDUCTION RECOMMENDATIONS
-// =============================================
-
-const WASTE_WINDOW_DAYS = 7
-const WASTE_MIN_UNITS = 5
-// Waste must be at least this share of what was produced in the same
-// window to count as "excessive" rather than normal shrinkage.
-const WASTE_PRODUCTION_PCT_THRESHOLD = 0.15
-
-export interface WasteRecommendation {
-  product_name: string
-  pullout_quantity: number
-  oth_quantity: number
-  total_disposal_quantity: number
-  disposal_value: number
-  production_quantity_in_window: number
-  waste_pct_of_production: number | null
-  recommended_daily_reduction: number
-  detected: string
-  reason: string
-  action: string
-}
-
-export async function getWasteReductionRecommendations(): Promise<WasteRecommendation[]> {
+async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
   const windowStart = new Date()
-  windowStart.setDate(windowStart.getDate() - WASTE_WINDOW_DAYS)
+  windowStart.setDate(windowStart.getDate() - ANALYSIS_WINDOW_DAYS)
 
   const [{ data: disposals, error: dispErr }, { data: productionRecords, error: prodErr }] = await Promise.all([
     supabase
       .from('stock_disposals')
-      .select('product_id, type, quantity, created_at, products (name, price)')
+      .select('product_id, type, quantity, products (name, price)')
       .gte('created_at', windowStart.toISOString()),
     supabase
       .from('production')
@@ -548,55 +600,127 @@ export async function getWasteReductionRecommendations(): Promise<WasteRecommend
     entry.value += (d.products?.price || 0) * d.quantity
   })
 
-  return Object.entries(disposalMap)
-    .map(([productId, d]) => {
-      const totalDisposal = d.pullout + d.oth
-      const producedInWindow = producedByProduct[productId] || 0
-      const wastePct = producedInWindow > 0 ? totalDisposal / producedInWindow : null
+  const signals = new Map<string, WasteSignal>()
 
-      const isExcessive = totalDisposal >= WASTE_MIN_UNITS &&
-        (wastePct === null ? true : wastePct >= WASTE_PRODUCTION_PCT_THRESHOLD)
-      if (!isExcessive) return null
+  Object.entries(disposalMap).forEach(([productId, d]) => {
+    const totalDisposal = d.pullout + d.oth
+    if (totalDisposal === 0) return
+    const producedInWindow = producedByProduct[productId] || 0
 
-      const recommendedDailyReduction = Math.max(1, Math.round(totalDisposal / WASTE_WINDOW_DAYS))
+    if (producedInWindow === 0) {
+      // Exception case: no waste_pct can be computed. This is NOT the normal
+      // rule run with a zero denominator — it's a separate, deliberately
+      // stricter-by-default gate, since a tiny disposal with nothing produced
+      // is usually a missed production log, not a real waste problem.
+      const triggered = totalDisposal >= ZERO_PRODUCTION_WASTE_MIN_UNITS || d.value >= ZERO_PRODUCTION_WASTE_MIN_VALUE
+      if (!triggered) return
 
-      return {
+      signals.set(productId, {
+        product_id: productId,
         product_name: d.name,
         pullout_quantity: d.pullout,
         oth_quantity: d.oth,
-        total_disposal_quantity: totalDisposal,
+        total_disposal: totalDisposal,
         disposal_value: d.value,
-        production_quantity_in_window: producedInWindow,
-        waste_pct_of_production: wastePct !== null ? Math.round(wastePct * 100) : null,
-        recommended_daily_reduction: recommendedDailyReduction,
-        detected: `${d.name} had ${totalDisposal} unit${totalDisposal !== 1 ? 's' : ''} disposed (${d.pullout} pull-out${d.pullout !== 1 ? 's' : ''}, ${d.oth} on-the-house) over the last ${WASTE_WINDOW_DAYS} days.`,
-        reason: wastePct !== null
-          ? `That's ${Math.round(wastePct * 100)}% of the ${producedInWindow} units produced in the same period — consistently high waste.`
-          : `₱${d.value.toFixed(2)} in value was lost with no matching production logged in this window.`,
-        action: `Consider reducing daily production by ${recommendedDailyReduction} unit${recommendedDailyReduction !== 1 ? 's' : ''}.`,
-      }
+        production_quantity_in_window: 0,
+        waste_pct: null,
+        recommended_daily_reduction: 0, // no production baseline to reduce from — see buildWasteRecommendation
+        priority: wastePriorityFromZeroProduction(totalDisposal, d.value),
+      })
+      return
+    }
+
+    // Normal case: production exists, so waste_pct is meaningful.
+    const wastePct = totalDisposal / producedInWindow
+    if (totalDisposal < WASTE_MIN_UNITS || wastePct < WASTE_THRESHOLD_PCT) return
+
+    signals.set(productId, {
+      product_id: productId,
+      product_name: d.name,
+      pullout_quantity: d.pullout,
+      oth_quantity: d.oth,
+      total_disposal: totalDisposal,
+      disposal_value: d.value,
+      production_quantity_in_window: producedInWindow,
+      waste_pct: wastePct,
+      recommended_daily_reduction: Math.max(1, Math.round(totalDisposal / ANALYSIS_WINDOW_DAYS)),
+      priority: wastePriorityFromPct(wastePct),
     })
-    .filter((r): r is WasteRecommendation => r !== null)
-    .sort((a, b) => b.total_disposal_quantity - a.total_disposal_quantity)
+  })
+
+  return signals
 }
 
-// =============================================
-// SLOW-MOVING PRODUCT RECOMMENDATIONS
-// =============================================
-
-const SLOW_MOVING_WINDOW_DAYS = 7
-const SLOW_MOVING_MAX_UNITS = 10
-
-export interface SlowMovingRecommendation {
-  product_name: string
-  units_sold: number
-  window_days: number
-  detected: string
-  reason: string
-  action: string
+function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecommendation {
+  const gapLabel = s.gap_pct === null ? 'N/A (zero production)' : `${Math.round(s.gap_pct * 100)}%`
+  return {
+    type: 'production',
+    priority: s.priority,
+    productId: s.product_id,
+    productName: s.product_name,
+    title: s.direction === 'increase' ? 'Increase Production' : 'Decrease Production',
+    reason: s.gap_pct === null
+      ? `${s.product_name} is selling ${s.avg_daily_demand} units/day with zero production logged in the last ${ANALYSIS_WINDOW_DAYS} days, exceeding the minimum activity threshold of ${MIN_ACTIVITY_UNITS_PER_DAY} units/day.`
+      : `Demand is ${Math.round(s.gap_pct * 100)}% ${s.direction === 'increase' ? 'higher' : 'lower'} than production, exceeding the configured ${Math.round(PRODUCTION_GAP_THRESHOLD_PCT * 100)}% threshold.`,
+    recommendedAction: s.direction === 'increase'
+      ? `Increase production to approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day.`
+      : `Decrease production to approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day.`,
+    metrics: {
+      'Demand': `${s.avg_daily_demand} units/day`,
+      'Production': `${s.avg_daily_production} units/day`,
+      'Gap': gapLabel,
+      'Window (days)': ANALYSIS_WINDOW_DAYS,
+    },
+  }
 }
 
-export async function getSlowMovingRecommendations(): Promise<SlowMovingRecommendation[]> {
+function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
+  const isZeroProduction = s.waste_pct === null
+
+  return {
+    type: 'waste',
+    priority: s.priority,
+    productId: s.product_id,
+    productName: s.product_name,
+    title: isZeroProduction ? 'Investigate Waste — No Matching Production' : 'Reduce Waste',
+    reason: isZeroProduction
+      ? `${s.product_name} had ${s.total_disposal} unit${s.total_disposal !== 1 ? 's' : ''} disposed worth ₱${s.disposal_value.toFixed(2)}, but no matching production was logged during the last ${ANALYSIS_WINDOW_DAYS} days. This is a potential inventory or production-recording issue.`
+      : `Waste represents ${Math.round(s.waste_pct! * 100)}% of production and exceeds the configured ${Math.round(WASTE_THRESHOLD_PCT * 100)}% threshold.`,
+    recommendedAction: isZeroProduction
+      ? 'Review the disposal records and production logs before adjusting production.'
+      : `Reduce daily production by approximately ${s.recommended_daily_reduction} unit${s.recommended_daily_reduction !== 1 ? 's' : ''} and review batch size.`,
+    metrics: {
+      'Produced': `${s.production_quantity_in_window} units`,
+      'Pull-outs': s.pullout_quantity,
+      'OTH': s.oth_quantity,
+      'Total waste': `${s.total_disposal} units`,
+      'Waste rate': isZeroProduction ? 'N/A (no production logged)' : `${Math.round(s.waste_pct! * 100)}%`,
+      'Value lost': `₱${s.disposal_value.toFixed(2)}`,
+    },
+  }
+}
+
+function buildConflictRecommendation(prod: ProductionSignal, waste: WasteSignal): PrescriptiveRecommendation {
+  const gapLabel = prod.gap_pct === null ? 'no production logged' : `${Math.round(prod.gap_pct * 100)}% demand gap`
+  const wasteLabel = waste.waste_pct === null ? 'unverified waste (no production logged)' : `${Math.round(waste.waste_pct * 100)}% waste rate`
+  return {
+    type: 'conflict',
+    priority: 'high',
+    productId: prod.product_id,
+    productName: prod.product_name,
+    title: 'Conflicting Signals — Review Before Acting',
+    reason: `${prod.product_name} shows both rising demand (${gapLabel}) and excessive waste (${wasteLabel}) in the same ${ANALYSIS_WINDOW_DAYS}-day window — increasing output would likely increase waste too.`,
+    recommendedAction: 'High demand detected, but waste is also above the threshold. Review batch size and production scheduling before increasing total output. Address waste first.',
+    metrics: {
+      'Demand': `${prod.avg_daily_demand} units/day`,
+      'Production': `${prod.avg_daily_production} units/day`,
+      'Total waste': `${waste.total_disposal} units`,
+      'Waste rate': wasteLabel,
+    },
+  }
+}
+
+async function getSlowMovingRecs(): Promise<PrescriptiveRecommendation[]> {
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, name, created_at')
@@ -604,7 +728,7 @@ export async function getSlowMovingRecommendations(): Promise<SlowMovingRecommen
   if (productsError) throw productsError
 
   const windowStart = new Date()
-  windowStart.setDate(windowStart.getDate() - SLOW_MOVING_WINDOW_DAYS)
+  windowStart.setDate(windowStart.getDate() - ANALYSIS_WINDOW_DAYS)
 
   const { data: saleItems, error: itemsError } = await supabase
     .from('sale_items')
@@ -619,26 +743,70 @@ export async function getSlowMovingRecommendations(): Promise<SlowMovingRecommen
   })
 
   return (products || [])
-    // A brand-new product with 0 sales on day one isn't "slow-moving" —
-    // it just hasn't had a fair shot in this window yet.
+    // Exclude products not yet active for the full window — a new product
+    // with low sales on day one hasn't had a fair trial, not proof of weak demand.
     .filter(product => new Date(product.created_at) <= windowStart)
     .map(product => {
       const unitsSold = soldByProduct[product.id] || 0
       if (unitsSold > SLOW_MOVING_MAX_UNITS) return null
 
-      return {
-        product_name: product.name,
-        units_sold: unitsSold,
-        window_days: SLOW_MOVING_WINDOW_DAYS,
-        detected: `${product.name} sold only ${unitsSold} unit${unitsSold !== 1 ? 's' : ''} in the last ${SLOW_MOVING_WINDOW_DAYS} days.`,
-        reason: `That's at or below ${SLOW_MOVING_MAX_UNITS} units/week, suggesting weak demand.`,
-        action: unitsSold === 0
-          ? `Consider pausing production and reviewing whether this product should continue to be offered.`
-          : `Consider reducing production, running a promotion, or reviewing whether this product should continue to be produced.`,
+      const priority: RecommendationPriority = unitsSold === 0 ? 'medium' : 'low'
+
+      const rec: PrescriptiveRecommendation = {
+        type: 'slow_moving',
+        priority,
+        productId: product.id,
+        productName: product.name,
+        title: 'Slow-Moving Product',
+        reason: `${product.name} sold only ${unitsSold} unit${unitsSold !== 1 ? 's' : ''} in the last ${ANALYSIS_WINDOW_DAYS} days, at or below the configured ${SLOW_MOVING_MAX_UNITS}-unit/week threshold.`,
+        recommendedAction: unitsSold === 0
+          ? 'Consider pausing production and reviewing whether to continue offering this product.'
+          : 'Consider reducing production, running a promotion, or reviewing the product.',
+        metrics: {
+          'Units sold (7d)': unitsSold,
+          'Threshold': `\u2264 ${SLOW_MOVING_MAX_UNITS} units/week`,
+        },
       }
+      return rec
     })
-    .filter((r): r is SlowMovingRecommendation => r !== null)
-    .sort((a, b) => a.units_sold - b.units_sold)
+    .filter((r): r is PrescriptiveRecommendation => r !== null)
+}
+
+const PRIORITY_ORDER: Record<RecommendationPriority, number> = { high: 0, medium: 1, low: 2 }
+
+export async function getPrescriptiveRecommendations(): Promise<PrescriptiveRecommendation[]> {
+  const [productionSignals, wasteSignals, slowMovingRecs] = await Promise.all([
+    getProductionSignals(),
+    getWasteSignals(),
+    getSlowMovingRecs(),
+  ])
+
+  const results: PrescriptiveRecommendation[] = []
+  const consumedWasteIds = new Set<string>()
+
+  productionSignals.forEach((prod, productId) => {
+    const waste = wasteSignals.get(productId)
+
+    // Conflict: rising demand says "produce more," waste says "produce less."
+    // Only a true conflict when production direction is 'increase' — a
+    // 'decrease' signal and a waste signal actually agree, not clash.
+    if (prod.direction === 'increase' && waste) {
+      results.push(buildConflictRecommendation(prod, waste))
+      consumedWasteIds.add(productId)
+      return
+    }
+
+    results.push(buildProductionRecommendation(prod))
+  })
+
+  wasteSignals.forEach((waste, productId) => {
+    if (consumedWasteIds.has(productId)) return // already folded into a conflict recommendation
+    results.push(buildWasteRecommendation(waste))
+  })
+
+  results.push(...slowMovingRecs)
+
+  return results.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
 }
 
 // =============================================
