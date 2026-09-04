@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import {
@@ -367,32 +367,129 @@ function RecommendationGroup({
   )
 }
 
-// ─── SUMMARY COUNTS BAR ─────────────────────────────────────────
+// ─── FILTER BAR + FILTERED RECOMMENDATIONS ──────────────────────
 
-function RecommendationSummary({ recs }: { recs: PrescriptiveRecommendation[] }) {
-  const high   = recs.filter(r => r.priority === 'high').length
-  const medium = recs.filter(r => r.priority === 'medium').length
-  const low    = recs.filter(r => r.priority === 'low').length
+type PriorityFilter = 'all' | RecommendationPriority
+type TypeFilter = 'all' | RecommendationType
+
+function RecommendationFilters({ recs }: { recs: PrescriptiveRecommendation[] }) {
+  // Default to 'high' so the manager sees urgent items immediately
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('high')
+  const [typeFilter, setTypeFilter]         = useState<TypeFilter>('all')
+
+  // Counts always reflect the full unfiltered list — badges never change when a filter is active
+  const priorityCounts = {
+    all:    recs.length,
+    high:   recs.filter(r => r.priority === 'high').length,
+    medium: recs.filter(r => r.priority === 'medium').length,
+    low:    recs.filter(r => r.priority === 'low').length,
+  }
+  const typeCounts: Record<TypeFilter, number> = {
+    all:         recs.length,
+    production:  recs.filter(r => r.type === 'production').length,
+    waste:       recs.filter(r => r.type === 'waste').length,
+    slow_moving: recs.filter(r => r.type === 'slow_moving').length,
+    conflict:    recs.filter(r => r.type === 'conflict').length,
+  }
+
+  // Apply both filters together
+  const filtered = recs.filter(r => {
+    const priorityOk = priorityFilter === 'all' || r.priority === priorityFilter
+    const typeOk     = typeFilter === 'all'     || r.type === typeFilter
+    return priorityOk && typeOk
+  })
+
+  // Group filtered list by type for display
+  const TYPE_ORDER: RecommendationType[] = ['conflict', 'production', 'waste', 'slow_moving']
+  const byType = TYPE_ORDER.reduce<Record<RecommendationType, PrescriptiveRecommendation[]>>(
+    (acc, t) => ({ ...acc, [t]: filtered.filter(r => r.type === t) }),
+    {} as Record<RecommendationType, PrescriptiveRecommendation[]>
+  )
+
+  // Priority pill — active style uses semantic colour, inactive uses ghost
+  function priorityPillClass(key: PriorityFilter): string {
+    return priorityFilter === key
+      ? 'text-white'
+      : 'bg-white text-gray-600 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+  }
+  function priorityPillStyle(key: PriorityFilter): React.CSSProperties {
+    if (priorityFilter !== key) return { boxShadow: '2px 2px 7px rgba(0,0,0,0.08)' }
+    if (key === 'all')    return { backgroundColor: '#220901' }
+    if (key === 'high')   return { backgroundColor: '#b91c1c' }
+    if (key === 'medium') return { backgroundColor: '#ca8a04' }
+    if (key === 'low')    return { backgroundColor: '#6b7280' }
+    return {}
+  }
+
+  // Type pill — active uses brand navy (matches existing period-selector active state)
+  function typePillClass(key: TypeFilter): string {
+    return typeFilter === key
+      ? 'text-white'
+      : 'bg-white text-gray-600 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
+  }
+  function typePillStyle(key: TypeFilter): React.CSSProperties {
+    return typeFilter === key
+      ? { backgroundColor: '#1a2340' }
+      : { boxShadow: '2px 2px 7px rgba(0,0,0,0.08)' }
+  }
+
+  const PRIORITY_PILLS: { key: PriorityFilter; label: string }[] = [
+    { key: 'all',    label: `All ${priorityCounts.all}` },
+    { key: 'high',   label: `High ${priorityCounts.high}` },
+    { key: 'medium', label: `Medium ${priorityCounts.medium}` },
+    { key: 'low',    label: `Low ${priorityCounts.low}` },
+  ]
+
+  const TYPE_PILLS: { key: TypeFilter; label: string }[] = [
+    { key: 'all',         label: 'All Types' },
+    { key: 'production',  label: `Production ${typeCounts.production}` },
+    { key: 'waste',       label: `Waste Reduction ${typeCounts.waste}` },
+    { key: 'slow_moving', label: `Slow-Moving ${typeCounts.slow_moving}` },
+    { key: 'conflict',    label: `Conflicts ${typeCounts.conflict}` },
+  ]
 
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-5">
-      <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-gray-800 text-white">
-        {recs.length} Total
-      </span>
-      {high > 0 && (
-        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-red-100 text-red-700">
-          {high} High
-        </span>
-      )}
-      {medium > 0 && (
-        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-yellow-100 text-yellow-800">
-          {medium} Medium
-        </span>
-      )}
-      {low > 0 && (
-        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-gray-100 text-gray-600">
-          {low} Low
-        </span>
+    <div>
+      {/* Row 1: priority filters */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {PRIORITY_PILLS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setPriorityFilter(key)}
+            className={`text-xs font-black px-3 py-1.5 rounded-sm transition-colors ${priorityPillClass(key)}`}
+            style={priorityPillStyle(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Row 2: type filters */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        {TYPE_PILLS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTypeFilter(key)}
+            className={`text-xs font-bold px-3 py-1.5 rounded-sm transition-colors ${typePillClass(key)}`}
+            style={typePillStyle(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtered results */}
+      {filtered.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="text-sm font-bold text-gray-500">No recommendations match this filter.</p>
+          <p className="text-xs text-gray-400 mt-1">Try selecting a different priority or type.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {TYPE_ORDER.map(type => (
+            <RecommendationGroup key={type} type={type} recs={byType[type]} />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1164,28 +1261,10 @@ export default function AnalyticsPage() {
                   </div>
                 )}
 
-                {/* Recommendations — grouped by type, with summary counts */}
-                {!prescriptiveLoading && !prescriptiveError && hasOperationalRecs && (() => {
-                  // Group by type in a fixed display order:
-                  // conflict first (needs immediate review), then production, waste, slow_moving
-                  const ORDER: RecommendationType[] = ['conflict', 'production', 'waste', 'slow_moving']
-                  const byType = ORDER.reduce<Record<RecommendationType, PrescriptiveRecommendation[]>>(
-                    (acc, t) => ({ ...acc, [t]: prescriptiveRecs.filter(r => r.type === t) }),
-                    {} as Record<RecommendationType, PrescriptiveRecommendation[]>
-                  )
-
-                  return (
-                    <div className="space-y-6">
-                      {/* Summary counts bar */}
-                      <RecommendationSummary recs={prescriptiveRecs} />
-
-                      {/* One group per type (only rendered if non-empty) */}
-                      {ORDER.map(type => (
-                        <RecommendationGroup key={type} type={type} recs={byType[type]} />
-                      ))}
-                    </div>
-                  )
-                })()}
+                {/* Recommendations — filter bar + grouped results */}
+                {!prescriptiveLoading && !prescriptiveError && hasOperationalRecs && (
+                  <RecommendationFilters recs={prescriptiveRecs} />
+                )}
               </div>
             </div>
           </div>
