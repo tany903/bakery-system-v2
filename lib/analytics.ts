@@ -465,6 +465,7 @@ interface WasteSignal {
   waste_pct: number | null // null only when there was zero matching production, graded on volume/value instead
   recommended_daily_reduction: number
   priority: RecommendationPriority
+  is_production_tracked: boolean
 }
 
 function productionPriorityFromGap(gapPct: number): RecommendationPriority {
@@ -485,10 +486,15 @@ function wastePriorityFromZeroProduction(totalDisposal: number, disposalValue: n
 }
 
 async function getProductionSignals(): Promise<Map<string, ProductionSignal>> {
+  // Only products the bakery actually manufactures are eligible for
+  // production recommendations — resale items (canned drinks, etc.) are
+  // excluded at the query level so they never enter the demand-vs-production
+  // comparison or the conflict-detection pass below.
   const { data: products, error: productsError } = await supabase
     .from('products')
     .select('id, name')
     .eq('is_archived', false)
+    .eq('production_tracked', true)
   if (productsError) throw productsError
 
   const windowStart = new Date()
@@ -571,9 +577,13 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
   windowStart.setDate(windowStart.getDate() - ANALYSIS_WINDOW_DAYS)
 
   const [{ data: disposals, error: dispErr }, { data: productionRecords, error: prodErr }] = await Promise.all([
+    // NOTE: disposal/waste analytics still cover every product, resale
+    // items included — production_tracked is only used here to pick the
+    // correct message/action for the zero-production case below, never to
+    // filter which products are eligible for a waste recommendation.
     supabase
       .from('stock_disposals')
-      .select('product_id, type, quantity, products (name, price)')
+      .select('product_id, type, quantity, products (name, price, production_tracked)')
       .gte('created_at', windowStart.toISOString()),
     supabase
       .from('production')
@@ -589,10 +599,16 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
     producedByProduct[rec.product_id] = (producedByProduct[rec.product_id] || 0) + rec.quantity_produced
   })
 
-  const disposalMap: { [id: string]: { name: string; pullout: number; oth: number; value: number } } = {}
+  const disposalMap: { [id: string]: { name: string; pullout: number; oth: number; value: number; is_production_tracked: boolean } } = {}
   ;(disposals || []).forEach((d: any) => {
     if (!disposalMap[d.product_id]) {
-      disposalMap[d.product_id] = { name: d.products?.name || 'Unknown', pullout: 0, oth: 0, value: 0 }
+      disposalMap[d.product_id] = {
+        name: d.products?.name || 'Unknown',
+        pullout: 0,
+        oth: 0,
+        value: 0,
+        is_production_tracked: d.products?.production_tracked ?? true,
+      }
     }
     const entry = disposalMap[d.product_id]
     if (d.type === 'pullout') entry.pullout += d.quantity
@@ -612,6 +628,8 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
       // rule run with a zero denominator — it's a separate, deliberately
       // stricter-by-default gate, since a tiny disposal with nothing produced
       // is usually a missed production log, not a real waste problem.
+      // (For non-production-tracked resale items, zero production is simply
+      // expected — they're never manufactured in-house at all.)
       const triggered = totalDisposal >= ZERO_PRODUCTION_WASTE_MIN_UNITS || d.value >= ZERO_PRODUCTION_WASTE_MIN_VALUE
       if (!triggered) return
 
@@ -626,6 +644,7 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
         waste_pct: null,
         recommended_daily_reduction: 0, // no production baseline to reduce from — see buildWasteRecommendation
         priority: wastePriorityFromZeroProduction(totalDisposal, d.value),
+        is_production_tracked: d.is_production_tracked,
       })
       return
     }
@@ -645,6 +664,7 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
       waste_pct: wastePct,
       recommended_daily_reduction: Math.max(1, Math.round(totalDisposal / ANALYSIS_WINDOW_DAYS)),
       priority: wastePriorityFromPct(wastePct),
+      is_production_tracked: d.is_production_tracked,
     })
   })
 
@@ -676,17 +696,29 @@ function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecomme
 
 function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
   const isZeroProduction = s.waste_pct === null
+  // Resale items (production_tracked = false) are never expected to have
+  // production records at all, so the "possible recording issue" framing
+  // used for bakery-made products would be actively misleading here.
+  const isResaleZeroProduction = isZeroProduction && !s.is_production_tracked
 
   return {
     type: 'waste',
     priority: s.priority,
     productId: s.product_id,
     productName: s.product_name,
-    title: isZeroProduction ? 'Investigate Waste — No Matching Production' : 'Reduce Waste',
-    reason: isZeroProduction
+    title: isResaleZeroProduction
+      ? 'Review Resale Item Waste'
+      : isZeroProduction
+      ? 'Investigate Waste — No Matching Production'
+      : 'Reduce Waste',
+    reason: isResaleZeroProduction
+      ? `${s.product_name} is a resale item (not produced in-house) and had ${s.total_disposal} unit${s.total_disposal !== 1 ? 's' : ''} disposed worth ₱${s.disposal_value.toFixed(2)} in the last ${ANALYSIS_WINDOW_DAYS} days.`
+      : isZeroProduction
       ? `${s.product_name} had ${s.total_disposal} unit${s.total_disposal !== 1 ? 's' : ''} disposed worth ₱${s.disposal_value.toFixed(2)}, but no matching production was logged during the last ${ANALYSIS_WINDOW_DAYS} days. This is a potential inventory or production-recording issue.`
       : `Waste represents ${Math.round(s.waste_pct! * 100)}% of production and exceeds the configured ${Math.round(WASTE_THRESHOLD_PCT * 100)}% threshold.`,
-    recommendedAction: isZeroProduction
+    recommendedAction: isResaleZeroProduction
+      ? 'Review receiving/purchase records for this item and check storage conditions or expiry handling.'
+      : isZeroProduction
       ? 'Review the disposal records and production logs before adjusting production.'
       : `Reduce daily production by approximately ${s.recommended_daily_reduction} unit${s.recommended_daily_reduction !== 1 ? 's' : ''} and review batch size.`,
     metrics: {
@@ -694,7 +726,7 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
       'Pull-outs': s.pullout_quantity,
       'OTH': s.oth_quantity,
       'Total waste': `${s.total_disposal} units`,
-      'Waste rate': isZeroProduction ? 'N/A (no production logged)' : `${Math.round(s.waste_pct! * 100)}%`,
+      'Waste rate': isZeroProduction ? (isResaleZeroProduction ? 'N/A (resale item)' : 'N/A (no production logged)') : `${Math.round(s.waste_pct! * 100)}%`,
       'Value lost': `₱${s.disposal_value.toFixed(2)}`,
     },
   }
@@ -790,6 +822,8 @@ export async function getPrescriptiveRecommendations(): Promise<PrescriptiveReco
     // Conflict: rising demand says "produce more," waste says "produce less."
     // Only a true conflict when production direction is 'increase' — a
     // 'decrease' signal and a waste signal actually agree, not clash.
+    // (This naturally never fires for non-production-tracked products,
+    // since getProductionSignals() never generates a signal for them.)
     if (prod.direction === 'increase' && waste) {
       results.push(buildConflictRecommendation(prod, waste))
       consumedWasteIds.add(productId)

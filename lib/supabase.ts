@@ -45,6 +45,7 @@ export interface Product {
   archived_at?: string
   created_at: string
   updated_at: string
+  production_tracked: boolean
 }
 
 export interface RestockRequest {
