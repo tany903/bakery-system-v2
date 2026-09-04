@@ -194,98 +194,206 @@ const TYPE_LABELS: Record<RecommendationType, string> = {
   conflict: 'Conflict / Review',
 }
 
+// How many metrics to show collapsed before the "View details" toggle
+const METRICS_PREVIEW_COUNT = 2
+
 function formatMetricValue(value: number | string | null): string {
   if (value === null) return '—'
   return String(value)
 }
 
 function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
+  const [expanded, setExpanded] = useState(false)
   const styles = PRIORITY_STYLES[rec.priority]
   const isConflict = rec.type === 'conflict'
+  const isHigh = rec.priority === 'high'
+
+  const metricEntries = Object.entries(rec.metrics)
+  const previewMetrics = metricEntries.slice(0, METRICS_PREVIEW_COUNT)
+  const extraMetrics = metricEntries.slice(METRICS_PREVIEW_COUNT)
+  const hasExtra = extraMetrics.length > 0
 
   return (
     <div
-      className={`rounded-sm border ${styles.border} ${isConflict ? 'bg-white' : styles.bg} overflow-hidden`}
+      className={`rounded-sm border overflow-hidden flex flex-col ${
+        isConflict
+          ? 'border-red-300 bg-white'
+          : isHigh
+          ? `${styles.border} ${styles.bg}`
+          : `${styles.border} bg-white`
+      }`}
       style={{
         boxShadow: isConflict
-          ? '0 0 0 2px #dc2626, 0 4px 16px rgba(220,38,38,0.12)'
-          : '0 2px 8px rgba(0,0,0,0.06)',
+          ? '0 0 0 1.5px #dc2626, 0 2px 8px rgba(220,38,38,0.10)'
+          : isHigh
+          ? '0 2px 8px rgba(0,0,0,0.08)'
+          : '0 1px 4px rgba(0,0,0,0.06)',
       }}
     >
-      {/* Card header */}
+      {/* ── Header row: priority + product name ── */}
       <div
-        className={`px-4 py-3 flex items-center gap-2 flex-wrap ${
-          isConflict ? 'bg-red-700' : 'border-b ' + styles.border
+        className={`px-3 py-2 flex items-center gap-2 border-b ${
+          isConflict ? 'bg-red-700 border-red-600' : styles.border
         }`}
       >
-        {/* Priority badge */}
         <span
-          className={`text-xs font-black px-2 py-0.5 rounded-sm tracking-wide ${
-            isConflict
-              ? 'bg-red-900 text-red-200'
-              : styles.badge
+          className={`text-xs font-black px-1.5 py-0.5 rounded-sm tracking-wide shrink-0 ${
+            isConflict ? 'bg-red-900 text-red-200' : styles.badge
           }`}
         >
           {rec.priority.toUpperCase()}
         </span>
-
-        {/* Type label */}
         <span
-          className={`text-xs font-semibold px-2 py-0.5 rounded-sm ${
-            isConflict
-              ? 'bg-red-800 text-red-100'
-              : 'bg-white text-gray-500 border border-gray-200'
+          className={`text-sm font-black truncate flex-1 min-w-0 ${
+            isConflict ? 'text-white' : 'text-gray-800'
           }`}
+          title={rec.productName}
         >
-          {TYPE_LABELS[rec.type]}
-        </span>
-
-        {/* Product name */}
-        <span className={`ml-auto text-sm font-black ${isConflict ? 'text-white' : 'text-gray-800'}`}>
           {rec.productName}
         </span>
       </div>
 
-      {/* Card body */}
-      <div className="px-4 py-4">
+      {/* ── Body ── */}
+      <div className="px-3 py-3 flex flex-col gap-2 flex-1">
         {/* Title */}
-        <p className={`font-black text-base mb-2 ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+        <p className={`font-black text-sm leading-tight ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
           {rec.title}
         </p>
 
-        {/* Metrics */}
-        {Object.keys(rec.metrics).length > 0 && (
-          <div className="flex flex-wrap gap-x-5 gap-y-1 mb-3">
-            {Object.entries(rec.metrics).map(([key, val]) => (
-              <div key={key} className="flex items-baseline gap-1">
-                <span className="text-xs text-gray-400 font-semibold">{key}:</span>
-                <span className="text-xs font-black text-gray-700">{formatMetricValue(val)}</span>
-              </div>
+        {/* Key metrics — always visible */}
+        {previewMetrics.length > 0 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+            {previewMetrics.map(([key, val]) => (
+              <span key={key} className="text-xs text-gray-500">
+                <span className="font-semibold text-gray-400">{key}:</span>{' '}
+                <span className="font-black text-gray-700">{formatMetricValue(val)}</span>
+              </span>
             ))}
           </div>
         )}
 
-        {/* Why */}
-        <div className="mb-3">
-          <p className="text-xs font-semibold text-gray-400 mb-0.5">Why</p>
-          <p className="text-sm text-gray-600 leading-relaxed">{rec.reason}</p>
-        </div>
+        {/* Expanded: remaining metrics + reason */}
+        {expanded && (
+          <div className="flex flex-col gap-2">
+            {extraMetrics.length > 0 && (
+              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                {extraMetrics.map(([key, val]) => (
+                  <span key={key} className="text-xs text-gray-500">
+                    <span className="font-semibold text-gray-400">{key}:</span>{' '}
+                    <span className="font-black text-gray-700">{formatMetricValue(val)}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-gray-500 leading-relaxed">{rec.reason}</p>
+          </div>
+        )}
 
-        {/* Recommended action */}
+        {/* Recommended action — always visible */}
         <div
-          className={`px-3 py-2.5 rounded-sm border-l-4 ${
-            isConflict
-              ? 'bg-red-50 border-red-400'
-              : 'bg-white border-yellow-400'
+          className={`px-2.5 py-2 rounded-sm border-l-4 mt-auto ${
+            isConflict ? 'bg-red-50 border-red-400' : 'bg-white border-yellow-400'
           }`}
-          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
+          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
         >
-          <p className="text-xs font-semibold text-gray-400 mb-0.5">Recommended Action</p>
-          <p className={`text-sm font-black ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+          <p className={`text-xs font-black leading-snug ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
             {rec.recommendedAction}
           </p>
         </div>
+
+        {/* Expand / collapse toggle */}
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className={`text-xs font-bold self-start mt-0.5 transition-colors ${
+            isConflict
+              ? 'text-red-500 hover:text-red-700'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          {expanded ? '▲ Hide details' : `▼ View details${hasExtra ? ` (+${extraMetrics.length} metrics)` : ''}`}
+        </button>
       </div>
+    </div>
+  )
+}
+
+// ─── TYPE GROUP (heading + 2-col grid of cards) ──────────────────
+
+const TYPE_GROUP_META: Record<RecommendationType, { label: string; icon: string }> = {
+  production:   { label: 'Production',          icon: '⚙️' },
+  waste:        { label: 'Waste Reduction',      icon: '♻️' },
+  slow_moving:  { label: 'Slow-Moving Products', icon: '📦' },
+  conflict:     { label: 'Conflicting Signals',  icon: '⚠️' },
+}
+
+function RecommendationGroup({
+  type,
+  recs,
+}: {
+  type: RecommendationType
+  recs: PrescriptiveRecommendation[]
+}) {
+  if (recs.length === 0) return null
+  const meta = TYPE_GROUP_META[type]
+  const isConflict = type === 'conflict'
+
+  return (
+    <div>
+      {/* Group heading */}
+      <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${isConflict ? 'border-red-200' : 'border-gray-100'}`}>
+        <span className="text-base leading-none">{meta.icon}</span>
+        <h4 className={`text-sm font-black ${isConflict ? 'text-red-700' : 'text-gray-700'}`}>
+          {meta.label}
+        </h4>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+          isConflict ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
+        }`}>
+          {recs.length}
+        </span>
+        {isConflict && (
+          <span className="text-xs text-red-500 font-semibold ml-1">
+            — review before acting
+          </span>
+        )}
+      </div>
+
+      {/* 2-column responsive grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {recs.map(rec => (
+          <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── SUMMARY COUNTS BAR ─────────────────────────────────────────
+
+function RecommendationSummary({ recs }: { recs: PrescriptiveRecommendation[] }) {
+  const high   = recs.filter(r => r.priority === 'high').length
+  const medium = recs.filter(r => r.priority === 'medium').length
+  const low    = recs.filter(r => r.priority === 'low').length
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-5">
+      <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-gray-800 text-white">
+        {recs.length} Total
+      </span>
+      {high > 0 && (
+        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-red-100 text-red-700">
+          {high} High
+        </span>
+      )}
+      {medium > 0 && (
+        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-yellow-100 text-yellow-800">
+          {medium} Medium
+        </span>
+      )}
+      {low > 0 && (
+        <span className="text-xs font-black px-3 py-1.5 rounded-sm bg-gray-100 text-gray-600">
+          {low} Low
+        </span>
+      )}
     </div>
   )
 }
@@ -434,10 +542,6 @@ export default function AnalyticsPage() {
   }
 
   const activeMonths = expenseData.filter(d => d.revenue > 0 || d.expenses > 0)
-
-  // Partition recs: conflict first (already sorted high→low by backend, but conflicts are always high)
-  const conflictRecs = prescriptiveRecs.filter(r => r.type === 'conflict')
-  const nonConflictRecs = prescriptiveRecs.filter(r => r.type !== 'conflict')
   const hasOperationalRecs = prescriptiveRecs.length > 0
 
   return (
@@ -1019,17 +1123,12 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            {/* ── OPERATIONAL RECOMMENDATIONS (new unified section) ── */}
+            {/* ── OPERATIONAL RECOMMENDATIONS ── */}
             <div className="bg-white rounded-sm overflow-hidden" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
               <div className="px-6 py-4 border-b border-gray-100">
                 <div className="flex items-center gap-2 mb-0.5">
                   <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
                   <h3 className="font-black text-gray-900">Operational Recommendations</h3>
-                  {!prescriptiveLoading && hasOperationalRecs && (
-                    <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                      {prescriptiveRecs.length} recommendation{prescriptiveRecs.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
                 </div>
                 <p className="text-xs text-gray-400">
                   Production, waste reduction, slow-moving products, and conflict signals — based on the last 7 days.
@@ -1065,32 +1164,28 @@ export default function AnalyticsPage() {
                   </div>
                 )}
 
-                {/* Recommendations */}
-                {!prescriptiveLoading && !prescriptiveError && hasOperationalRecs && (
-                  <div className="space-y-4">
-                    {/* Conflict recommendations first — they are always high-priority and need immediate attention */}
-                    {conflictRecs.length > 0 && (
-                      <div className="space-y-4">
-                        <p className="text-xs font-bold text-red-600 flex items-center gap-1.5">
-                          <span>⚠</span> Conflicting signals require review before taking action
-                        </p>
-                        {conflictRecs.map(rec => (
-                          <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
-                        ))}
-                        {nonConflictRecs.length > 0 && (
-                          <div className="border-t border-gray-100 pt-4">
-                            <p className="text-xs font-bold text-gray-400 mb-4">Other recommendations</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                {/* Recommendations — grouped by type, with summary counts */}
+                {!prescriptiveLoading && !prescriptiveError && hasOperationalRecs && (() => {
+                  // Group by type in a fixed display order:
+                  // conflict first (needs immediate review), then production, waste, slow_moving
+                  const ORDER: RecommendationType[] = ['conflict', 'production', 'waste', 'slow_moving']
+                  const byType = ORDER.reduce<Record<RecommendationType, PrescriptiveRecommendation[]>>(
+                    (acc, t) => ({ ...acc, [t]: prescriptiveRecs.filter(r => r.type === t) }),
+                    {} as Record<RecommendationType, PrescriptiveRecommendation[]>
+                  )
 
-                    {/* Remaining recommendations in priority order (already sorted by backend) */}
-                    {nonConflictRecs.map(rec => (
-                      <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
-                    ))}
-                  </div>
-                )}
+                  return (
+                    <div className="space-y-6">
+                      {/* Summary counts bar */}
+                      <RecommendationSummary recs={prescriptiveRecs} />
+
+                      {/* One group per type (only rendered if non-empty) */}
+                      {ORDER.map(type => (
+                        <RecommendationGroup key={type} type={type} recs={byType[type]} />
+                      ))}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
