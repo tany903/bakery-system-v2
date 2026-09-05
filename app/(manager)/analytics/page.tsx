@@ -801,9 +801,9 @@ export default function AnalyticsPage() {
                       <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Top Products</p>
                       <p className="text-xl font-black text-gray-900">By Revenue</p>
                     </div>
-                    <ResponsiveContainer width="100%" height={260}>
+                    <ResponsiveContainer width="100%" height={Math.max(160, summary.topProducts.slice(0, 12).length * 44 + 32)}>
                       <BarChart
-                        data={summary.topProducts.slice(0, 6)}
+                        data={summary.topProducts.slice(0, 12)}
                         layout="vertical"
                         margin={{ top: 0, right: 24, left: 8, bottom: 12 }}
                         barCategoryGap="30%"
@@ -822,7 +822,7 @@ export default function AnalyticsPage() {
                         />
                         <Tooltip content={<ProductTooltip />} cursor={{ fill: 'rgba(123,17,17,0.04)' }} />
                         <Bar dataKey="total_revenue" radius={[0, 6, 6, 0]} maxBarSize={20}>
-                          {summary.topProducts.slice(0, 6).map((_, i) => (
+                          {summary.topProducts.slice(0, 12).map((_, i) => (
                             <Cell key={i} fill={i === 0 ? '#7B1111' : i === 1 ? '#a03030' : i === 2 ? '#c45555' : i === 3 ? '#d47070' : '#e0a0a0'} />
                           ))}
                         </Bar>

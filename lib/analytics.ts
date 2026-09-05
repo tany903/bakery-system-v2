@@ -112,7 +112,7 @@ export async function getSalesSummary(
   const topProducts: TopProduct[] = Object.entries(productMap)
     .map(([product_name, stats]) => ({ product_name, ...stats }))
     .sort((a, b) => b.total_revenue - a.total_revenue)
-    .slice(0, 10)
+    .slice(0, 12)
 
   // Daily stats
   const dailyMap: { [key: string]: { revenue: number; transactions: number } } = {}
