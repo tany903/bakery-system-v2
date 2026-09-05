@@ -12,6 +12,7 @@ import {
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 const PAGE_SIZE = 9
 
@@ -191,13 +192,7 @@ export default function ReservationsPage() {
       <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
     </div>
   )
-  const LogoutButton = () => (
-    <button onClick={handleLogout}
-      className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-      <span className="text-base font-bold">→</span>
-      <span className="text-xs font-semibold">Logout</span>
-    </button>
-  )
+
 
   const cards = (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -441,7 +436,7 @@ export default function ReservationsPage() {
               </a>
             ))}
           </div>
-          <div className="ml-auto"><LogoutButton /></div>
+          <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>
         </div>
         <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {completeModal}
@@ -463,19 +458,17 @@ export default function ReservationsPage() {
               </a>
             ))}
           </div>
-          <div className="ml-auto"><LogoutButton /></div>
+          <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>
         </div>
         <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
       </div>
     )
   }
-
  // Manager view
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
-        <Branding /><LogoutButton />
-      </div>
+        <Branding /><LogoutButton onLogout={handleLogout} />      </div>
       <div className="flex flex-1 relative">
         <LogoWatermark /><ManagerSidebar />{mainContent}
       </div>

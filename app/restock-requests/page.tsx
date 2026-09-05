@@ -17,6 +17,7 @@ import FulfillRequestModal from '@/components/FulfillRequestModal'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 const PAGE_SIZE = 9
 const DECLINE_REASONS = ['No stocks', 'Repeat order', 'Others']
@@ -51,15 +52,6 @@ function Branding() {
   )
 }
 
-function LogoutButton({ onLogout }: { onLogout: () => void }) {
-  return (
-    <button onClick={onLogout}
-      className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-      <span className="text-base font-bold">→</span>
-      <span className="text-xs font-semibold">Logout</span>
-    </button>
-  )
-}
 
 export default function RestockRequestsPage() {
   const router = useRouter()

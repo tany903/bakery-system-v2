@@ -16,6 +16,7 @@ import {
 } from '@/lib/purchase-orders'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400"
 const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -418,10 +419,7 @@ export default function PurchaseOrdersPage() {
             </div>
             <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
           </div>
-          <button onClick={handleLogout} className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors">
-            <span className="text-base font-bold">→</span>
-            <span className="text-xs font-semibold">Logout</span>
-          </button>
+                  <LogoutButton onLogout={handleLogout} />
         </div>
       ) : (
         <div className="relative z-10 w-full flex items-center gap-6 px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>

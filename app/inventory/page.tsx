@@ -19,6 +19,7 @@ import { signOut } from '@/lib/auth'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 const ITEMS_PER_PAGE = 10
 
@@ -127,11 +128,7 @@ function TopNav({ onLogout }: { onLogout: () => void }) {
         </div>
         <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
       </div>
-      <button onClick={onLogout}
-        className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors">
-        <span className="text-base font-bold">→</span>
-        <span className="text-xs font-semibold">Logout</span>
-      </button>
+           <LogoutButton onLogout={onLogout} />
     </div>
   )
 }
@@ -164,12 +161,8 @@ function CashierTopNav({ onLogout }: { onLogout: () => void }) {
           </a>
         ))}
       </div>
-      <div className="ml-auto">
-        <button onClick={onLogout}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors">
-          <span className="text-base font-bold">→</span>
-          <span className="text-xs font-semibold">Logout</span>
-        </button>
+            <div className="ml-auto">
+        <LogoutButton onLogout={onLogout} />
       </div>
     </div>
   )
@@ -206,12 +199,8 @@ function ProductionTopNav({ onLogout }: { onLogout: () => void }) {
           </a>
         ))}
       </div>
-      <div className="ml-auto">
-        <button onClick={onLogout}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors">
-          <span className="text-base font-bold">→</span>
-          <span className="text-xs font-semibold">Logout</span>
-        </button>
+            <div className="ml-auto">
+        <LogoutButton onLogout={onLogout} />
       </div>
     </div>
   )

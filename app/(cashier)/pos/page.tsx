@@ -19,6 +19,7 @@ import Receipt from '@/components/Receipt'
 import CashRegisterWidget from '@/components/CashRegisterWidget'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 // Convert a datetime-local string (treated as Asia/Manila) to UTC ISO string
 function manilaLocalToUTC(localStr: string): string {
@@ -423,11 +424,7 @@ export default function POSPage() {
             <span className="text-xs font-semibold">Cash</span>
           </button>
         )}
-        <button onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-          <span className="text-base font-bold">→</span>
-          <span className="text-xs font-semibold">Logout</span>
-        </button>
+                <LogoutButton onLogout={handleLogout} />
       </div>
 
       {/* BODY */}

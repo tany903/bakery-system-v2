@@ -8,6 +8,7 @@ import CashRegisterWidget from '@/components/CashRegisterWidget'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 interface LowStockProduct {
   id: string
@@ -245,13 +246,7 @@ export default function ManagerDashboard() {
           </div>
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors"
-        >
-          <span className="text-base font-bold">→</span>
-          <span className="text-xs font-semibold">Logout</span>
-        </button>
+                <LogoutButton onLogout={handleLogout} />
       </div>
 
       {/* BODY */}

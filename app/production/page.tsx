@@ -18,6 +18,7 @@ import ProductionRecordCard from '@/components/ProductionRecordCard'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 export default function ProductionDashboardPage() {
   const router = useRouter()
@@ -127,13 +128,7 @@ const productionNavLinks = [
     </div>
   )
 
-  const LogoutButton = () => (
-    <button onClick={handleLogout}
-      className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-      <span className="text-base font-bold">→</span>
-      <span className="text-xs font-semibold">Logout</span>
-    </button>
-  )
+
 
   const PageContent = () => (
     <div className="relative z-10 flex-1 p-6 overflow-y-auto">
@@ -347,8 +342,7 @@ const productionNavLinks = [
               </a>
             ))}
           </div>
-          <div className="ml-auto"><LogoutButton /></div>
-        </div>
+          <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>        </div>
         <div className="flex flex-1 relative">
           <LogoWatermark />
           <PageContent />
@@ -363,8 +357,7 @@ const productionNavLinks = [
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
         <Branding />
-        <LogoutButton />
-      </div>
+        <LogoutButton onLogout={handleLogout} />      </div>
       <div className="flex flex-1 relative">
         <LogoWatermark />
        <ManagerSidebar />

@@ -11,6 +11,7 @@ import type { ExpenseCategory } from '@/lib/supabase'
 import { supabase } from '@/lib/supabase'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
+import LogoutButton from '@/components/LogoutButton'
 
 interface Transaction {
   id: string
@@ -269,13 +270,7 @@ export default function AuditLogsPage() {
           </div>
           <span className="text-white font-black text-xl tracking-wide">IS GOOD</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors"
-        >
-          <span className="text-base font-bold">→</span>
-          <span className="text-xs font-semibold">Logout</span>
-        </button>
+        <LogoutButton onLogout={handleLogout} />
       </div>
 
       {/* BODY */}
