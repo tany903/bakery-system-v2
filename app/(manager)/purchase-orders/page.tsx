@@ -440,10 +440,7 @@ export default function PurchaseOrdersPage() {
             ))}
           </div>
           <div className="ml-auto">
-            <button onClick={handleLogout} className="flex flex-col items-center gap-0.5 px-5 py-2 bg-white rounded-sm text-gray-800 hover:bg-gray-100 transition-colors shrink-0">
-              <span className="text-base font-bold">→</span>
-              <span className="text-xs font-semibold">Logout</span>
-            </button>
+            <LogoutButton onLogout={handleLogout} />
           </div>
         </div>
       )}
