@@ -34,6 +34,7 @@ import {
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
+import { exportAnalyticsToPDF } from '@/lib/pdf-export'
 
 
 type Period = 'today' | 'week' | 'month' | 'year'
@@ -581,6 +582,22 @@ export default function AnalyticsPage() {
     exportSalesToCSV(summary, getPeriodDates(period).label)
   }
 
+  function handleExportPDF() {
+    if (!summary) return
+    exportAnalyticsToPDF({
+      periodLabel: getPeriodDates(period).label,
+      summary,
+      trend,
+      disposalStats,
+      financialOverview: activeMonths,
+      dailyData,
+      dailyDateLabel: new Date(dailyDate).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+      restockRecommendations: recommendations,
+      bestDays,
+      prescriptiveRecs,
+    })
+  }
+
   async function handleMonthDrilldown(monthLabel: string) {
     const monthNames: { [k: string]: number } = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 }
     const parts = monthLabel.split(' ')
@@ -679,6 +696,10 @@ export default function AnalyticsPage() {
               <button onClick={() => exportExpensesToCSV(expenseData)} disabled={expenseData.length === 0}
                 className="px-4 py-2 rounded-sm font-bold text-white text-xs disabled:opacity-50 bg-blue-600 hover:bg-blue-700">
                 ↓ Export Revenue CSV
+              </button>
+              <button onClick={handleExportPDF} disabled={!summary}
+                className="px-4 py-2 rounded-sm font-bold text-white text-xs disabled:opacity-50" style={{ backgroundColor: '#7B1111' }}>
+                ↓ Export PDF
               </button>
             </div>
           </div>

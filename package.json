@@ -17,6 +17,8 @@
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.95.3",
     "date-fns": "^4.1.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.564.0",
     "next": "16.1.6",
     "react": "19.2.3",
@@ -33,8 +35,8 @@
     "cypress": "^15.20.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "start-server-and-test": "^3.0.12",
     "jsdom": "^30.0.1",
+    "start-server-and-test": "^3.0.12",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.6.0"
