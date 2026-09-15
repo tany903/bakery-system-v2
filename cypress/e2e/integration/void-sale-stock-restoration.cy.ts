@@ -27,15 +27,47 @@ describe('[integration test] Void Sale & Stock Restoration', () => {
   let stockBefore: number
   let saleNumber: string
 
+  // The manager Inventory page renders a second "Low Stock Alerts" table
+  // above the main "All Products" table whenever any product is low/out
+  // of stock. Both tables are <table><tbody><tr> and both sit inside a
+  // div.bg-white wrapper, so a bare `table tbody tr` selector is ambiguous:
+  // it silently grabs whichever table happens to render first in the DOM.
+  // When alerts are present, that table's second column is a location
+  // string ("shop"/"production"), not a stock count — the source of the
+  // NaN failures. Scoping to the "All Products" card removes the ambiguity
+  // regardless of whether the alerts table is showing.
+  function shopStockCell() {
+    return cy.contains('h2', 'All Products')
+      .closest('.bg-white')
+      .find('table tbody tr')
+      .first()
+      .find('td')
+      .eq(1) // verified against the header row in the first test below
+  }
+
+  // Extracts the leading integer from a cell's text. Tolerant of nested
+  // spans, "/ <threshold>" suffixes, unit labels like "pcs", and whitespace.
+  function parseStockValue(text: string): number {
+    const match = text.trim().match(/\d+/)
+    return match ? parseInt(match[0], 10) : NaN
+  }
+
   it('records shop stock before sale', () => {
     cy.loginAsManager()
     cy.visit('/inventory')
-    cy.get('table tbody tr').first().within(() => {
-      cy.get('td').eq(1).invoke('text').then(s => {
-        stockBefore = parseInt(s.trim())
-        cy.log(`Stock before: ${stockBefore}`)
-        expect(stockBefore).to.be.greaterThan(0)
-      })
+
+    // Guard the column-index assumption used by shopStockCell() against
+    // future markup changes, instead of silently trusting td.eq(1).
+    cy.contains('h2', 'All Products')
+      .closest('.bg-white')
+      .find('table thead th')
+      .eq(1)
+      .should('contain.text', 'Shop Stock')
+
+    shopStockCell().invoke('text').then(text => {
+      stockBefore = parseStockValue(text)
+      cy.log(`Stock before: ${stockBefore}`)
+      expect(stockBefore).to.be.greaterThan(0)
     })
   })
 
@@ -58,10 +90,8 @@ describe('[integration test] Void Sale & Stock Restoration', () => {
   it('stock decremented by 1 after sale', () => {
     cy.loginAsManager()
     cy.visit('/inventory')
-    cy.get('table tbody tr').first().within(() => {
-      cy.get('td').eq(1).invoke('text').should(s => {
-        expect(parseInt(s.trim())).to.equal(stockBefore - 1)
-      })
+    shopStockCell().invoke('text').should(text => {
+      expect(parseStockValue(text)).to.equal(stockBefore - 1)
     })
   })
 
@@ -94,10 +124,8 @@ describe('[integration test] Void Sale & Stock Restoration', () => {
   it('shop stock restored to pre-sale level after void', () => {
     cy.loginAsManager()
     cy.visit('/inventory')
-    cy.get('table tbody tr').first().within(() => {
-      cy.get('td').eq(1).invoke('text').should(s => {
-        expect(parseInt(s.trim())).to.equal(stockBefore)
-      })
+    shopStockCell().invoke('text').should(text => {
+      expect(parseStockValue(text)).to.equal(stockBefore)
     })
   })
 

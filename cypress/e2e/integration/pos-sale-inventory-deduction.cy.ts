@@ -21,7 +21,30 @@
  * and inventory transaction both exist. No phantom stock is created.
  */
 
+// cypress/e2e/integration/pos-sale-inventory-deduction.cy.ts
+
 const TEST_PRODUCT = 'Sprite'
+
+// Scopes to the "All Products" table (the last table on the page)
+// and reads Shop Stock (td index 1) for the matching product row.
+function getShopStock(alias: string) {
+  // The main products table is the last table on the page.
+  // We scope everything to it so we don't accidentally match the
+  // Low Stock Alerts table (which has different columns).
+  cy.get('table').last().within(() => {
+    cy.contains('tbody tr', TEST_PRODUCT)
+      .first()
+      .find('td')
+      .eq(1)                      // Shop Stock is always column index 1
+      .invoke('text')
+      .then(text => {
+        // Cell text is like "42/ 10" — grab only the leading digits
+        const value = parseInt(text.trim(), 10)
+        cy.log(`Raw Shop Stock text: "${text}" → parsed: ${value}`)
+        cy.wrap(value).as(alias)
+      })
+  })
+}
 
 describe('[integration test] Atomic Checkout & Inventory Deduction', () => {
   let stockBefore: number
@@ -31,13 +54,15 @@ describe('[integration test] Atomic Checkout & Inventory Deduction', () => {
     cy.loginAsManager()
     cy.visit('/inventory')
     cy.get('input[placeholder="Search products..."]').type(TEST_PRODUCT)
-    cy.contains('table tbody tr', TEST_PRODUCT).first().within(() => {
-      // column order: Product(0), Shop Stock(1), Production Stock(2), Actions(3)
-      cy.get('td').eq(1).invoke('text').then(stock => {
-        stockBefore = parseInt(stock.trim())
-      })
-    }).then(() => {
-      cy.log(`Product: ${TEST_PRODUCT} | Shop stock before: ${stockBefore}`)
+
+    // Wait for the products table row to appear
+    cy.get('table').last().contains('tbody tr', TEST_PRODUCT, { timeout: 8000 }).should('be.visible')
+
+    getShopStock('stockBefore')
+
+    cy.get('@stockBefore').then(stock => {
+      stockBefore = stock as unknown as number
+      cy.log(`Stock before: ${stockBefore}`)
       expect(stockBefore).to.be.greaterThan(0)
     })
   })
@@ -48,9 +73,7 @@ describe('[integration test] Atomic Checkout & Inventory Deduction', () => {
     cy.get('input[placeholder="Search products..."]').type(TEST_PRODUCT)
     cy.contains('button', TEST_PRODUCT).click()
 
-    // Enter amount tendered so Charge can proceed with a cash sale
     cy.get('input[type="number"]').first().clear().type('1000')
-
     cy.contains('button', /^Charge ₱/).should('not.be.disabled').click()
 
     cy.contains('button', 'Print Receipt', { timeout: 10000 }).should('be.visible')
@@ -68,12 +91,15 @@ describe('[integration test] Atomic Checkout & Inventory Deduction', () => {
     cy.loginAsManager()
     cy.visit('/inventory')
     cy.get('input[placeholder="Search products..."]').type(TEST_PRODUCT)
-    cy.contains('table tbody tr', TEST_PRODUCT).first().within(() => {
-      cy.get('td').eq(1).invoke('text').then(stock => {
-        const stockAfter = parseInt(stock.trim())
-        cy.log(`Shop stock after: ${stockAfter} | Expected: ${stockBefore - 1}`)
-        expect(stockAfter).to.equal(stockBefore - 1)
-      })
+
+    cy.get('table').last().contains('tbody tr', TEST_PRODUCT, { timeout: 8000 }).should('be.visible')
+
+    getShopStock('stockAfter')
+
+    cy.get('@stockAfter').then(stockAfter => {
+      const after = stockAfter as unknown as number
+      cy.log(`Stock after: ${after} | Expected: ${stockBefore - 1}`)
+      expect(after).to.equal(stockBefore - 1)
     })
   })
 

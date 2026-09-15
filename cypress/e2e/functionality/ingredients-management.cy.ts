@@ -22,68 +22,168 @@ describe('[functionality test] Ingredients Management', () => {
 
   it('opens add ingredient modal with correct fields', () => {
     cy.contains('button', 'Add Ingredient').click()
+
     cy.get('.fixed.inset-0').within(() => {
-      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]').should('be.visible')
-      cy.get('input[placeholder="e.g., kg, liters, pieces"]').should('be.visible')
-      cy.get('input[placeholder="e.g., 50"]').should('be.visible')
-      cy.contains('button', 'Add Ingredient').should('be.visible')
+      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]')
+        .should('be.visible')
+
+      cy.get('select')
+        .eq(0)
+        .should('be.visible')
+
+      cy.get('input[placeholder="e.g., 50"]')
+        .should('be.visible')
+
+      cy.contains('button', 'Add Ingredient')
+        .should('be.visible')
     })
+
     cy.contains('button', 'Cancel').click()
   })
 
   it('adds a new ingredient and it appears in the list', () => {
     const name = `Cypress Ingredient ${Date.now()}`
+
     cy.contains('button', 'Add Ingredient').click()
 
     cy.get('.fixed.inset-0').within(() => {
-      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]').type(name)
-      cy.get('input[placeholder="e.g., kg, liters, pieces"]').type('kg')
-      cy.get('input[placeholder="e.g., 50"]').type('10')
+      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]')
+        .type(name)
+
+      cy.get('select')
+        .eq(0)
+        .select('kg')
+
+      cy.get('input[placeholder="e.g., 50"]')
+        .type('10')
+
       cy.contains('button', 'Add Ingredient').click()
     })
 
-    cy.contains(name, { timeout: 10000 }).should('be.visible')
+    cy.contains(name, { timeout: 10000 })
+      .should('be.visible')
   })
 
   it('opens edit modal for an ingredient', () => {
-    cy.get('table tbody tr').first().within(() => {
-      cy.contains('button', 'Edit').click()
-    })
-    cy.get('.fixed.inset-0').should('be.visible')
+    cy.get('table tbody tr')
+      .first()
+      .within(() => {
+        cy.contains('button', 'Edit').click()
+      })
+
+    cy.get('.fixed.inset-0')
+      .should('be.visible')
+
     cy.contains('button', 'Cancel').click()
   })
 
   it('archives an ingredient and it disappears from active list', () => {
     const name = `Archive Test ${Date.now()}`
+
     cy.contains('button', 'Add Ingredient').click()
+
     cy.get('.fixed.inset-0').within(() => {
-      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]').type(name)
-      cy.get('input[placeholder="e.g., kg, liters, pieces"]').type('pcs')
-      cy.get('input[placeholder="e.g., 50"]').type('5')
+      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]')
+        .type(name)
+
+      cy.get('select')
+        .eq(0)
+        .select('pieces')
+
+      cy.get('input[placeholder="e.g., 50"]')
+        .type('5')
+
       cy.contains('button', 'Add Ingredient').click()
     })
-    cy.contains(name, { timeout: 10000 }).should('be.visible')
 
-    cy.contains(name).parents('tr').first().within(() => {
-      cy.contains('button', 'Archive').click()
-    })
+    cy.contains(name, { timeout: 10000 })
+      .should('be.visible')
 
-    cy.contains(name).should('not.exist')
+    cy.contains(name)
+      .parents('tr')
+      .first()
+      .within(() => {
+        cy.contains('button', 'Archive').click()
+      })
+
+    cy.contains(name)
+      .should('not.exist')
   })
 
   it('shows archived ingredients in archived view', () => {
     cy.contains('button', 'Archived').click()
-    cy.contains(/Archived/i).should('be.visible')
+
+    cy.contains(/Archived/i)
+      .should('be.visible')
+  })
+
+  it('restores an archived ingredient', () => {
+    const name = `Restore Test ${Date.now()}`
+
+    // Add ingredient
+    cy.contains('button', 'Add Ingredient').click()
+
+    cy.get('.fixed.inset-0').within(() => {
+      cy.get('input[placeholder="e.g., Flour, Sugar, Eggs"]')
+        .type(name)
+
+      cy.get('select')
+        .eq(0)
+        .select('kg')
+
+      cy.get('input[placeholder="e.g., 50"]')
+        .type('5')
+
+      cy.contains('button', 'Add Ingredient').click()
+    })
+
+    // Verify added
+    cy.contains(name, { timeout: 10000 })
+      .should('be.visible')
+
+    // Archive ingredient
+    cy.contains(name)
+      .parents('tr')
+      .first()
+      .within(() => {
+        cy.contains('button', 'Archive').click()
+      })
+
+    cy.contains(name)
+      .should('not.exist')
+
+    // Open archived view
+    cy.contains('button', 'Archived').click()
+
+    // Restore ingredient
+    cy.contains(name)
+      .parents('tr')
+      .first()
+      .within(() => {
+        cy.contains('button', 'Restore').click()
+      })
+
+    // Switch back to active view
+    cy.contains('button', 'Active').click()
+
+    // Verify restored ingredient appears
+    cy.contains(name, { timeout: 10000 })
+      .should('be.visible')
   })
 
   it('search filters ingredients by name', () => {
-    cy.get('input[placeholder="Search ingredients..."]').should('be.visible')
+    cy.get('input[placeholder="Search ingredients..."]')
+      .should('be.visible')
       .type('sugar')
+
     cy.wait(500)
+
     cy.get('table tbody tr').each($row => {
-      cy.wrap($row).invoke('text').then(text => {
-        expect(text.toLowerCase()).to.include('sugar')
-      })
+      cy.wrap($row)
+        .invoke('text')
+        .then(text => {
+          expect(text.toLowerCase()).to.include('sugar')
+        })
     })
   })
 })
