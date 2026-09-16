@@ -8,7 +8,6 @@ import {
   getExpenseVsRevenue,
   getRestockRecommendations,
   getSalesTrend,
-  getBestSellingDays,
   exportSalesToCSV,
   exportExpensesToCSV,
   getDisposalAnalytics,
@@ -21,7 +20,6 @@ import {
   type ExpenseVsRevenue,
   type RestockRecommendation,
   type SalesTrend,
-  type BestSellingDay,
   type DailySalesBreakdown,
   type PrescriptiveRecommendation,
   type RecommendationPriority,
@@ -508,7 +506,6 @@ export default function AnalyticsPage() {
   const [error, setError] = useState('')
   const [recommendations, setRecommendations] = useState<RestockRecommendation[]>([])
   const [trend, setTrend] = useState<SalesTrend | null>(null)
-  const [bestDays, setBestDays] = useState<BestSellingDay[]>([])
   const [disposalStats, setDisposalStats] = useState<DisposalAnalytics | null>(null)
   const [drilldownMonth, setDrilldownMonth] = useState<{ label: string; year: number; month: number } | null>(null)
   const [weeklyData, setWeeklyData] = useState<WeeklyBreakdown[]>([])
@@ -562,13 +559,11 @@ export default function AnalyticsPage() {
     setPrescriptiveLoading(true)
     setPrescriptiveError('')
     try {
-      const [restockData, bestDaysData, opRecs] = await Promise.all([
+      const [restockData, opRecs] = await Promise.all([
         getRestockRecommendations(),
-        getBestSellingDays(),
         getPrescriptiveRecommendations(),
       ])
       setRecommendations(restockData)
-      setBestDays(bestDaysData)
       // Backend already sorts by priority; preserve that order
       setPrescriptiveRecs(opRecs)
     } catch {
@@ -594,7 +589,6 @@ export default function AnalyticsPage() {
       dailyData,
       dailyDateLabel: new Date(dailyDate).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
       restockRecommendations: recommendations,
-      bestDays,
       prescriptiveRecs,
     })
   }
@@ -1144,8 +1138,8 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {/* Restock + Best Days */}
-            <div className="grid grid-cols-2 gap-5 mb-5">
+            {/* Restock Recommendations */}
+            <div className="grid grid-cols-1 gap-5 mb-5">
               <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 mb-1">
                   <img src="/icons/Box.svg" alt="" className="w-5 h-5 opacity-50" />
@@ -1201,39 +1195,6 @@ export default function AnalyticsPage() {
                         )}
                       </div>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-white rounded-sm p-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                <div className="flex items-center gap-2 mb-1">
-                  <img src="/icons/Bar_chart.svg" alt="" className="w-5 h-5 opacity-50" />
-                  <h3 className="font-black text-gray-900">Best Days to Stock Up</h3>
-                </div>
-                <p className="text-xs text-gray-400 mb-4">Based on avg units sold per day over the last 30 days.</p>
-                {bestDays.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <div className="text-4xl mb-2">📊</div>
-                    <p className="text-sm">Not enough sales data yet.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {bestDays.map((d, index) => {
-                      const pct = bestDays[0].avgUnitsSold > 0 ? Math.round((d.avgUnitsSold / bestDays[0].avgUnitsSold) * 100) : 0
-                      return (
-                        <div key={d.day}>
-                          <div className="flex justify-between text-xs font-semibold mb-1">
-                            <span className="text-gray-700">
-                              {index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '    '}{d.day}
-                            </span>
-                            <span className="text-gray-500">{d.avgUnitsSold.toLocaleString('en-PH')} pcs avg</span>
-                          </div>
-                          <div className="w-full bg-gray-100 rounded-full h-2">
-                            <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: '#7B1111' }} />
-                          </div>
-                        </div>
-                      )
-                    })}
                   </div>
                 )}
               </div>

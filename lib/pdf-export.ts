@@ -7,7 +7,6 @@ import type {
   ExpenseVsRevenue,
   DailySalesBreakdown,
   RestockRecommendation,
-  BestSellingDay,
   PrescriptiveRecommendation,
 } from './analytics'
 
@@ -20,7 +19,6 @@ export interface AnalyticsPDFParams {
   dailyData: DailySalesBreakdown | null
   dailyDateLabel: string
   restockRecommendations: RestockRecommendation[]
-  bestDays: BestSellingDay[]
   prescriptiveRecs: PrescriptiveRecommendation[]
 }
 
@@ -93,7 +91,7 @@ const TYPE_LABELS: Record<PrescriptiveRecommendation['type'], string> = {
 export function exportAnalyticsToPDF(params: AnalyticsPDFParams): void {
   const {
     periodLabel, summary, trend, disposalStats, financialOverview,
-    dailyData, dailyDateLabel, restockRecommendations, bestDays, prescriptiveRecs,
+    dailyData, dailyDateLabel, restockRecommendations, prescriptiveRecs,
   } = params
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
@@ -253,23 +251,6 @@ export function exportAnalyticsToPDF(params: AnalyticsPDFParams): void {
       ]),
       styles: { fontSize: 8.5, cellPadding: 4 },
       headStyles: { fillColor: [245, 166, 35], textColor: [30, 30, 30] },
-    })
-    y = (doc as any).lastAutoTable.finalY + 15
-  }
-
-  if (bestDays.length > 0) {
-    y = ensureSpace(doc, y, 30)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text('Best Days to Stock Up', MARGIN, y)
-    y += 15
-    autoTable(doc, {
-      startY: y,
-      margin: { left: MARGIN, right: MARGIN },
-      head: [['Day', 'Avg Units Sold']],
-      body: bestDays.map(d => [d.day, String(d.avgUnitsSold)]),
-      styles: { fontSize: 9, cellPadding: 4 },
-      headStyles: { fillColor: [26, 35, 64] },
     })
     y = (doc as any).lastAutoTable.finalY + 15
   }

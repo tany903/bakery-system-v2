@@ -59,11 +59,6 @@ export interface SalesTrend {
   trend: 'up' | 'down' | 'flat'
 }
 
-export interface BestSellingDay {
-  day: string
-  avgUnitsSold: number
-}
-
 // =============================================
 // SALES ANALYTICS
 // =============================================
@@ -356,45 +351,6 @@ export async function getSalesTrend(period: Period): Promise<SalesTrend> {
     percentageChange,
     trend: percentageChange > 2 ? 'up' : percentageChange < -2 ? 'down' : 'flat',
   }
-}
-
-export async function getBestSellingDays(): Promise<BestSellingDay[]> {
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-  // Quantity sold, not peso revenue: one big custom order shouldn't make a
-  // day look like it needs more stock when it actually just needs one product.
-  const { data: saleItems, error } = await supabase
-    .from('sale_items')
-    .select(`quantity, sales!inner (sale_date)`)
-    .eq('sales.is_voided', false)
-    .gte('sales.sale_date', thirtyDaysAgo.toISOString())
-
-  if (error) throw error
-
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const unitsByDay: { [key: string]: number } = {}
-
-  ;(saleItems || []).forEach((item: any) => {
-    const day = dayNames[new Date(item.sales.sale_date).getDay()]
-    unitsByDay[day] = (unitsByDay[day] || 0) + item.quantity
-  })
-
-  // Divide by how many *calendar days* of each weekday actually occurred in
-  // the window (4 or 5, not the transaction count) so this is a true
-  // per-day average rather than a per-transaction average.
-  const occurrencesByDay: { [key: string]: number } = {}
-  for (let i = 0; i < 30; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    const day = dayNames[d.getDay()]
-    occurrencesByDay[day] = (occurrencesByDay[day] || 0) + 1
-  }
-
-  return dayNames
-    .filter(day => unitsByDay[day])
-    .map(day => ({ day, avgUnitsSold: Math.round(unitsByDay[day] / occurrencesByDay[day]) }))
-    .sort((a, b) => b.avgUnitsSold - a.avgUnitsSold)
 }
 
 // =============================================
