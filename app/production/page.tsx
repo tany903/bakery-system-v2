@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
@@ -25,17 +25,7 @@ import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
 import LogoutButton from '@/components/LogoutButton'
 
-// ─── ADVANCE ORDER ALARM SETTINGS ───────────────────────────────
-
-// Alarm starts this many minutes before the pickup time...
-const ALARM_LEAD_MINUTES = 20
-// ...and stops this many minutes after it (so very old, forgotten orders don't keep ringing).
-const ALARM_GRACE_MINUTES = 60
-// How often the alarm sound repeats while an alarm is showing.
-const ALARM_REPEAT_MS = 5000
-const DISMISSED_KEY = 'dismissed-reservation-alarms'
-
-// ─── ADVANCE ORDER HELPERS ──────────────────────────────────────
+// ─── ADVANCE ORDER HELPERS (panel only — the alarm popup now lives in ReservationAlarmToast) ─
 
 function formatDuration(totalMinutes: number): string {
   if (totalMinutes < 60) return `${totalMinutes} min`
@@ -59,7 +49,7 @@ function describeDue(neededBy: string, now: number): { label: string; color: str
     return { label: `Overdue by ${formatDuration(overdueMin)}`, color: '#DC2626', bg: '#FEE2E2' }
   }
   const minutes = Math.ceil(diffMs / 60000)
-  if (minutes <= ALARM_LEAD_MINUTES) return { label: `Pickup in ${formatDuration(minutes)}`, color: '#DC2626', bg: '#FEE2E2' }
+  if (minutes <= 20) return { label: `Pickup in ${formatDuration(minutes)}`, color: '#DC2626', bg: '#FEE2E2' }
   if (minutes <= 60) return { label: `Pickup in ${formatDuration(minutes)}`, color: '#D97706', bg: '#FEF3C7' }
   return { label: `Pickup in ${formatDuration(minutes)}`, color: '#6B7280', bg: '#F3F4F6' }
 }
@@ -139,83 +129,6 @@ function AdvanceOrdersPanel({
   )
 }
 
-// ─── ADVANCE ORDER ALARM POPUP ──────────────────────────────────
-
-function AdvanceOrderAlarm({
-  alarms,
-  now,
-  soundReady,
-  markingId,
-  onMarkReady,
-  onDismiss,
-}: {
-  alarms: ReservationWithDetails[]
-  now: number
-  soundReady: boolean
-  markingId: string | null
-  onMarkReady: (id: string) => void
-  onDismiss: (id: string) => void
-}) {
-  if (alarms.length === 0) return null
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-sm w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
-        <div className="px-6 py-4 shrink-0" style={{ backgroundColor: '#7B1111' }}>
-          <h2 className="text-white font-black text-lg">🔔 Advance Order Pickup Soon</h2>
-          <p className="text-white text-xs opacity-70 mt-0.5">
-            {alarms.length} order{alarms.length !== 1 ? 's' : ''} need{alarms.length === 1 ? 's' : ''} to be ready
-          </p>
-        </div>
-
-        <div className="overflow-y-auto divide-y divide-gray-100">
-          {alarms.map(order => {
-            const due = describeDue(order.needed_by as string, now)
-            return (
-              <div key={order.id} className="px-6 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-base font-black text-gray-900">{order.customer_name}</p>
-                  <span className="text-xs font-black px-2.5 py-1 rounded-full shrink-0" style={{ backgroundColor: due.bg, color: due.color }}>
-                    {due.label}
-                  </span>
-                </div>
-                <p className="text-xs font-semibold text-gray-500 mt-0.5">
-                  Pickup at {formatPickupTime(order.needed_by as string)}
-                </p>
-                <p className="text-sm text-gray-800 font-semibold mt-2">{summarizeItems(order)}</p>
-                {order.notes && <p className="text-xs text-gray-500 mt-1 italic">{order.notes}</p>}
-
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => onMarkReady(order.id)}
-                    disabled={markingId === order.id}
-                    className="flex-1 py-2 rounded-sm font-bold text-white text-sm disabled:opacity-50"
-                    style={{ backgroundColor: '#10B981' }}
-                  >
-                    {markingId === order.id ? 'Saving...' : 'Mark Ready'}
-                  </button>
-                  <button
-                    onClick={() => onDismiss(order.id)}
-                    className="px-4 py-2 rounded-sm border border-gray-300 text-gray-900 text-sm font-semibold hover:bg-gray-100"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {!soundReady && (
-          <div className="px-6 py-2 bg-yellow-50 border-t border-yellow-200 shrink-0">
-            <p className="text-xs font-semibold text-yellow-800">🔇 Sound is off. Click anywhere on the page to turn it on.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ─── MAIN PAGE ──────────────────────────────────────────────────
 
 export default function ProductionDashboardPage() {
@@ -229,13 +142,10 @@ export default function ProductionDashboardPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [error, setError] = useState('')
 
-  // Advance orders / pickup alarm
+  // Advance orders panel (the alarm popup + sound now live globally in ReservationAlarmToast)
   const [reservations, setReservations] = useState<ReservationWithDetails[]>([])
   const [now, setNow] = useState(() => Date.now())
-  const [dismissedIds, setDismissedIds] = useState<string[]>([])
   const [markingId, setMarkingId] = useState<string | null>(null)
-  const [soundReady, setSoundReady] = useState(false)
-  const audioCtxRef = useRef<AudioContext | null>(null)
 
   // Modal state
   const [showModal, setShowModal] = useState(false)
@@ -248,38 +158,10 @@ export default function ProductionDashboardPage() {
   useEffect(() => { checkAuth() }, [])
   useRealtimeRefresh(['production', 'ingredients', 'products', 'reservations'], loadData)
 
-  // Clock tick so countdowns and the 20-minute window stay current
+  // Clock tick so the panel's countdowns stay current
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 15000)
     return () => clearInterval(id)
-  }, [])
-
-  // Remember which alarms were already dismissed, even after a page refresh
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DISMISSED_KEY)
-      if (raw) setDismissedIds(JSON.parse(raw))
-    } catch {}
-  }, [])
-
-  // Browsers only allow sound after the user has interacted with the page once.
-  useEffect(() => {
-    function unlockAudio() {
-      try {
-        const Ctx = window.AudioContext || (window as any).webkitAudioContext
-        if (!Ctx) return
-        if (!audioCtxRef.current) audioCtxRef.current = new Ctx()
-        audioCtxRef.current.resume().then(() => {
-          setSoundReady(audioCtxRef.current?.state === 'running')
-        })
-      } catch {}
-    }
-    window.addEventListener('pointerdown', unlockAudio)
-    window.addEventListener('keydown', unlockAudio)
-    return () => {
-      window.removeEventListener('pointerdown', unlockAudio)
-      window.removeEventListener('keydown', unlockAudio)
-    }
   }, [])
 
   async function checkAuth() {
@@ -349,62 +231,13 @@ export default function ProductionDashboardPage() {
     }
   }
 
-  function dismissAlarm(reservationId: string) {
-    const next = [...dismissedIds, reservationId].slice(-200)
-    setDismissedIds(next)
-    try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(next)) } catch {}
-  }
-
   const handleLogout = async () => { await signOut(); router.push('/login') }
 
-  // ── Advance order calculations ──
-  const DAY_MS = 24 * 60 * 60 * 1000
-  const leadMs = ALARM_LEAD_MINUTES * 60 * 1000
-  const graceMs = ALARM_GRACE_MINUTES * 60 * 1000
-
   // Panel: orders due within the next 24 hours, plus anything overdue
+  const DAY_MS = 24 * 60 * 60 * 1000
   const panelOrders = reservations.filter(r =>
     r.needed_by && new Date(r.needed_by).getTime() - now <= DAY_MS
   )
-
-  // Alarm: only production staff, only orders not yet marked ready, inside the alarm window
-  const activeAlarms = userRole === 'production'
-    ? reservations.filter(r => {
-        if (r.status !== 'pending' || !r.needed_by) return false
-        if (dismissedIds.includes(r.id)) return false
-        const diff = new Date(r.needed_by).getTime() - now
-        return diff <= leadMs && diff >= -graceMs
-      })
-    : []
-  const hasActiveAlarm = activeAlarms.length > 0
-
-  // Play the alarm sound now, and repeat until the alarm is dismissed or marked ready
-  useEffect(() => {
-    if (!hasActiveAlarm || !soundReady) return
-
-    function playAlarmBeep() {
-      const ctx = audioCtxRef.current
-      if (!ctx || ctx.state !== 'running') return
-      const start = ctx.currentTime
-      ;[0, 0.35, 0.7].forEach(offset => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.type = 'square'
-        osc.frequency.value = 880
-        gain.gain.setValueAtTime(0.0001, start + offset)
-        gain.gain.exponentialRampToValueAtTime(0.25, start + offset + 0.02)
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.25)
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.start(start + offset)
-        osc.stop(start + offset + 0.3)
-      })
-    }
-
-    playAlarmBeep()
-    const id = setInterval(playAlarmBeep, ALARM_REPEAT_MS)
-    return () => clearInterval(id)
-  }, [hasActiveAlarm, soundReady])
 
   const selectedProductData = products.find(p => p.id === selectedProduct)
 
@@ -422,16 +255,10 @@ const productionNavLinks = [
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none text-gray-900 focus:border-gray-400"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
 
-  // const Watermark = () => (
-  //   <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-  //     style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-  //     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-  // )
-
   // NOTE: Branding, PageContent and RecordModal are called as plain functions below
   // (e.g. {PageContent()}) instead of <PageContent />. They are defined inside this
   // component, so using them as JSX tags makes React rebuild them from scratch on every
-  // render, which now happens every 15 seconds because of the alarm clock.
+  // render, which now happens every 15 seconds because of the clock tick.
   const Branding = () => (
     <div className="flex items-center gap-3 shrink-0">
       <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
@@ -454,13 +281,6 @@ const productionNavLinks = [
           <p className="text-gray-700 font-medium mt-1">
             {new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
-          {userRole === 'production' && (
-            <p className="text-xs font-semibold mt-1" style={{ color: soundReady ? '#065F46' : '#92400E' }}>
-              {soundReady
-                ? '🔔 Pickup alarm sound is on'
-                : '🔇 Click anywhere on the page once to turn on the pickup alarm sound'}
-            </p>
-          )}
         </div>
         {userRole === 'production' && (
           <button onClick={openModal}
@@ -678,14 +498,6 @@ const productionNavLinks = [
           {PageContent()}
         </div>
         {showModal && RecordModal()}
-        <AdvanceOrderAlarm
-          alarms={activeAlarms}
-          now={now}
-          soundReady={soundReady}
-          markingId={markingId}
-          onMarkReady={handleMarkReady}
-          onDismiss={dismissAlarm}
-        />
       </div>
     )
   }
