@@ -8,6 +8,8 @@ interface ReceiptProps {
   onClose: () => void
 }
 
+const VAT_RATE = 0.12
+
 export default function Receipt({ sale, onClose }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null)
 
@@ -15,6 +17,11 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
     sale.payment_method === 'cash' &&
     sale.amount_tendered !== null &&
     sale.amount_tendered !== undefined
+
+  // Prices are VAT-inclusive, so back out the VATable sales and VAT amount
+  // from the total for the standard BIR-style breakdown on the receipt.
+  const vatableSales = sale.total_amount / (1 + VAT_RATE)
+  const vatAmount = sale.total_amount - vatableSales
 
   const handlePrint = () => {
     const printContent = receiptRef.current
@@ -57,6 +64,12 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
               display: flex;
               justify-content: space-between;
               margin: 5px 0;
+            }
+            .vat-breakdown {
+              margin-top: 8px;
+              padding-top: 8px;
+              border-top: 1px dashed #000;
+              font-size: 12px;
             }
             .total {
               margin-top: 10px;
@@ -144,6 +157,18 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* VAT Breakdown */}
+          <div className="vat-breakdown space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span style={{ color: '#555555' }}>VATable Sales:</span>
+              <span style={{ color: '#111111' }}>₱{vatableSales.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: '#555555' }}>VAT (12%):</span>
+              <span style={{ color: '#111111' }}>₱{vatAmount.toFixed(2)}</span>
+            </div>
           </div>
 
           {/* Total */}
