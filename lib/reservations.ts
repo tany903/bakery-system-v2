@@ -119,6 +119,23 @@ export async function getAllReservations(): Promise<ReservationWithDetails[]> {
   return (data as unknown as ReservationWithDetails[]) || []
 }
 
+// Orders that still need to be picked up (pending or ready) and have a pickup
+// time set, soonest first. Used by the production page for pickup alarms.
+export async function getUpcomingReservations(): Promise<ReservationWithDetails[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(`
+      *,
+      items:reservation_items (*)
+    `)
+    .in('status', ['pending', 'ready'])
+    .not('needed_by', 'is', null)
+    .order('needed_by', { ascending: true })
+
+  if (error) throw error
+  return (data as unknown as ReservationWithDetails[]) || []
+}
+
 export async function getReservationById(id: string): Promise<ReservationWithDetails | null> {
   const { data, error } = await supabase
     .from('reservations')
