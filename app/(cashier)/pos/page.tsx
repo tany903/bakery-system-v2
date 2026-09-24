@@ -567,7 +567,9 @@ export default function POSPage() {
 
               {/* PWD / Senior Citizen Discount toggle */}
               <button
+                type="button"
                 onClick={() => setPwdSeniorDiscount(v => !v)}
+                aria-pressed={pwdSeniorDiscount}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-sm border-2 mb-3 transition-colors"
                 style={pwdSeniorDiscount
                   ? { borderColor: '#D97706', backgroundColor: '#FEF3C7' }
@@ -582,7 +584,7 @@ export default function POSPage() {
                   style={{ backgroundColor: pwdSeniorDiscount ? '#D97706' : '#d1d5db' }}
                 >
                   <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+                    className="absolute top-0.5 left-0 w-4 h-4 rounded-full bg-white shadow transition-transform"
                     style={{ transform: pwdSeniorDiscount ? 'translateX(18px)' : 'translateX(2px)' }}
                   />
                 </span>
