@@ -84,8 +84,8 @@ function urgencyLabel(urgency: 'critical' | 'warning' | 'ok'): string {
 const TYPE_LABELS: Record<PrescriptiveRecommendation['type'], string> = {
   production: 'Production',
   waste: 'Waste Reduction',
+  fast_moving: 'Fast-Moving Products',
   slow_moving: 'Slow-Moving Products',
-  conflict: 'Conflicting Signals',
 }
 
 export function exportAnalyticsToPDF(params: AnalyticsPDFParams): void {
@@ -257,7 +257,7 @@ export function exportAnalyticsToPDF(params: AnalyticsPDFParams): void {
 
   // Operational recommendations from getPrescriptiveRecommendations(),
   // grouped by type to match the on-page card grouping.
-  const TYPE_ORDER: PrescriptiveRecommendation['type'][] = ['conflict', 'production', 'waste', 'slow_moving']
+  const TYPE_ORDER: PrescriptiveRecommendation['type'][] = ['production', 'waste', 'fast_moving', 'slow_moving']
   TYPE_ORDER.forEach(type => {
     const group = prescriptiveRecs.filter(r => r.type === type)
     if (group.length === 0) return
@@ -288,7 +288,7 @@ export function exportAnalyticsToPDF(params: AnalyticsPDFParams): void {
         3: { cellWidth: 'auto' },
         4: { cellWidth: 'auto' },
       },
-      headStyles: { fillColor: type === 'conflict' ? [185, 28, 28] : [26, 35, 64] },
+      headStyles: { fillColor: [26, 35, 64] },
     })
     y = (doc as any).lastAutoTable.finalY + 15
   })
