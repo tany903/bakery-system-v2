@@ -44,13 +44,34 @@ export default function ReservationAlarmToast() {
 
   const content = (
     <div
-      className="fixed bottom-4 right-4 flex flex-col gap-2 items-end pointer-events-none"
-      style={{ maxWidth: 340, width: '90vw', zIndex: 2147483000 }}
+      style={{
+        position: 'fixed',
+        bottom: 16,
+        right: 16,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        alignItems: 'flex-end',
+        maxWidth: 340,
+        width: '90vw',
+        zIndex: 2147483000,
+        pointerEvents: 'none',
+      }}
     >
       {!soundReady && (
         <div
-          className="text-[11px] font-semibold px-3 py-1.5 rounded-sm text-white self-stretch text-center pointer-events-auto"
-          style={{ backgroundColor: 'rgba(146,64,14,0.95)', backdropFilter: 'blur(6px)' }}
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '6px 12px',
+            borderRadius: 4,
+            color: 'white',
+            alignSelf: 'stretch',
+            textAlign: 'center',
+            backgroundColor: 'rgba(146,64,14,0.95)',
+            backdropFilter: 'blur(6px)',
+            pointerEvents: 'auto',
+          }}
         >
           🔇 Click anywhere to enable alarm sound
         </div>
@@ -61,42 +82,75 @@ export default function ReservationAlarmToast() {
         return (
           <div
             key={order.id}
-            className="rounded-sm w-full overflow-hidden pointer-events-auto"
             style={{
+              borderRadius: 4,
+              width: '100%',
+              overflow: 'hidden',
               boxShadow: '2px 2px 18px rgba(0,0,0,0.45)',
               border: '1px solid #7B1111',
-              backgroundColor: 'rgba(255,255,255,0.85)',
+              backgroundColor: 'rgba(255,255,255,0.9)',
               backdropFilter: 'blur(10px)',
               WebkitBackdropFilter: 'blur(10px)',
+              pointerEvents: 'auto',
             }}
           >
-            <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: 'rgba(123,17,17,0.92)' }}>
-              <span className="text-sm">🔔</span>
-              <p className="text-white text-xs font-black truncate flex-1">{order.customer_name}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', backgroundColor: 'rgba(123,17,17,0.92)' }}>
+              <span style={{ fontSize: 14 }}>🔔</span>
+              <p style={{ color: 'white', fontSize: 12, fontWeight: 900, flex: 1, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {order.customer_name}
+              </p>
               <span
-                className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0"
-                style={{ backgroundColor: due.bg, color: due.color }}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  padding: '2px 8px',
+                  borderRadius: 9999,
+                  flexShrink: 0,
+                  backgroundColor: due.bg,
+                  color: due.color,
+                }}
               >
                 {due.label}
               </span>
             </div>
-            <div className="px-3 py-2">
-              <p className="text-[11px] text-gray-600 font-semibold">
+            <div style={{ padding: '8px 12px' }}>
+              <p style={{ fontSize: 11, color: '#4B5563', fontWeight: 600, margin: 0 }}>
                 Pickup {formatPickupTime(order.needed_by as string)}
               </p>
-              <p className="text-xs text-gray-900 font-semibold mt-0.5 line-clamp-2">{summarizeItems(order)}</p>
-              <div className="flex gap-1.5 mt-2">
+              <p style={{ fontSize: 12, color: '#111827', fontWeight: 600, margin: '2px 0 0' }}>{summarizeItems(order)}</p>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <button
+                  type="button"
                   onClick={() => markReady(order.id)}
                   disabled={markingId === order.id}
-                  className="flex-1 py-1 rounded-sm font-bold text-white text-[11px] disabled:opacity-50"
-                  style={{ backgroundColor: '#10B981' }}
+                  style={{
+                    flex: 1,
+                    padding: '4px 0',
+                    borderRadius: 4,
+                    fontWeight: 700,
+                    color: 'white',
+                    fontSize: 11,
+                    border: 'none',
+                    cursor: markingId === order.id ? 'default' : 'pointer',
+                    opacity: markingId === order.id ? 0.5 : 1,
+                    backgroundColor: '#10B981',
+                  }}
                 >
                   {markingId === order.id ? 'Saving...' : 'Mark Ready'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => dismiss(order.id)}
-                  className="px-2.5 py-1 rounded-sm border border-gray-400 text-gray-800 text-[11px] font-semibold hover:bg-white"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: 4,
+                    border: '1px solid #9CA3AF',
+                    color: '#1F2937',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                  }}
                 >
                   Dismiss
                 </button>
@@ -108,9 +162,21 @@ export default function ReservationAlarmToast() {
 
       {hiddenCount > 0 && (
         <button
+          type="button"
           onClick={() => setExpanded(true)}
-          className="text-[11px] font-bold px-3 py-1 rounded-sm text-white self-stretch pointer-events-auto"
-          style={{ backgroundColor: 'rgba(34,9,1,0.92)', backdropFilter: 'blur(6px)' }}
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '4px 12px',
+            borderRadius: 4,
+            color: 'white',
+            alignSelf: 'stretch',
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: 'rgba(34,9,1,0.92)',
+            backdropFilter: 'blur(6px)',
+            pointerEvents: 'auto',
+          }}
         >
           +{hiddenCount} more order{hiddenCount !== 1 ? 's' : ''}
         </button>
