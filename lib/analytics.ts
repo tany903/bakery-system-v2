@@ -406,6 +406,12 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
 // and continues to use Simple Exponential Smoothing.
 const ANALYSIS_WINDOW_DAYS = 7
 const SHORT_TERM_WINDOW_DAYS = 3
+// A product must have sold at least this many units in the analysis window
+// before we call it "selling faster/slower" or recommend making more/less.
+// With only a sale or two, a tiny change looks like a huge percentage jump
+// (e.g. 1 sale in 7 days -> 2 sales looks like +100%) and just creates noise.
+// Raise this number to see fewer, more meaningful recommendations.
+const MIN_UNITS_FOR_TREND = 5
 
 export type RecommendationPriority = 'high' | 'medium' | 'low'
 export type RecommendationType = 'production' | 'waste' | 'fast_moving' | 'slow_moving'
@@ -425,6 +431,9 @@ interface DemandPattern {
   dailyDemand: number[]
   ma3: number
   ma7: number
+  // Whole-unit totals, used for manager-facing wording
+  total3: number
+  total7: number
   trendPct: number | null
   trendDirection: 'increasing' | 'decreasing' | 'stable'
   recentMa3: number
@@ -479,6 +488,8 @@ function buildDemandPattern(dailyDemand: number[]): DemandPattern {
 
   const ma3 = calculateAverage(padded.slice(-SHORT_TERM_WINDOW_DAYS))
   const ma7 = calculateAverage(padded.slice(-ANALYSIS_WINDOW_DAYS))
+  const total3 = Math.round(padded.slice(-SHORT_TERM_WINDOW_DAYS).reduce((sum, v) => sum + v, 0))
+  const total7 = Math.round(padded.slice(-ANALYSIS_WINDOW_DAYS).reduce((sum, v) => sum + v, 0))
 
   // Compare the latest 3-day moving average with the preceding 3-day moving
   // average when possible. This helps distinguish a sustained change from a
@@ -500,6 +511,8 @@ function buildDemandPattern(dailyDemand: number[]): DemandPattern {
     dailyDemand: padded,
     ma3: roundMetric(ma3),
     ma7: roundMetric(ma7),
+    total3,
+    total7,
     trendPct: trendPct === null ? null : roundMetric(trendPct),
     trendDirection,
     recentMa3: roundMetric(ma3),
@@ -608,6 +621,9 @@ async function getProductionSignals(): Promise<Map<string, ProductionSignal>> {
     const demandSeries = buildOperationalDailySeries(demandByProduct[product.id] || {}, ANALYSIS_WINDOW_DAYS)
     const productionSeries = buildOperationalDailySeries(productionByProduct[product.id] || {}, ANALYSIS_WINDOW_DAYS)
     const demand = buildDemandPattern(demandSeries)
+
+    // Too few sales to say anything meaningful about a trend
+    if (demand.total7 < MIN_UNITS_FOR_TREND) return
 
     const avgDailyProduction = calculateAverage(productionSeries)
     const recentProduction = calculateAverage(productionSeries.slice(-SHORT_TERM_WINDOW_DAYS))
@@ -751,19 +767,17 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
 }
 
 // ---------------------------------------------------------------------
-// Plain-language helpers for the manager-facing recommendation cards
+// Plain-language helpers for the manager-facing recommendation cards.
+// Everything shown is a whole number of units (you can't sell 0.3 of a pie).
 // ---------------------------------------------------------------------
-
-function lately(n: number): string {
-  return n === 0 ? 'none lately' : `about ${n} a day lately`
-}
-
-function onAverage(n: number): string {
-  return `about ${n} a day on average`
-}
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n !== 1 ? 's' : ''}`
+}
+
+// e.g. "6 sold in the last 3 days, 8 this past week"
+function salesSummary(d: DemandPattern): string {
+  return `${d.total3} sold in the last 3 days, ${d.total7} this past week`
 }
 
 // ---- Production ------------------------------------------------------
@@ -771,6 +785,7 @@ function plural(n: number, word: string): string {
 function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecommendation {
   const n = s.recommended_daily_production
   const increase = s.direction === 'increase'
+  const madeLast3Days = Math.round(s.recent_production * SHORT_TERM_WINDOW_DAYS)
 
   return {
     type: 'production',
@@ -779,14 +794,14 @@ function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecomme
     productName: s.product_name,
     title: increase ? 'Make More' : 'Make Less',
     reason: increase
-      ? `${s.product_name} is selling more than usual (${lately(s.demand.ma3)}, compared to ${onAverage(s.demand.ma7)}), but not enough is being made to keep up.`
-      : `${s.product_name} is selling less than usual (${lately(s.demand.ma3)}, compared to ${onAverage(s.demand.ma7)}), but more than that is still being made.`,
+      ? `${s.product_name} is selling more than usual (${salesSummary(s.demand)}), but not enough is being made to keep up.`
+      : `${s.product_name} is selling less than usual (${salesSummary(s.demand)}), but more than that is still being made.`,
     recommendedAction: increase
       ? `Make about ${n} a day to keep up with sales.`
       : `Cut back to about ${n} a day so less goes unsold.`,
     metrics: {
-      'Selling lately': `${s.demand.ma3} a day`,
-      'Made lately': `${s.recent_production} a day`,
+      'Sold, last 3 days': `${s.demand.total3}`,
+      'Made, last 3 days': `${madeLast3Days}`,
     },
   }
 }
@@ -819,15 +834,15 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
     recommendedAction = 'Check the disposal and production records for missing or wrong entries.'
   } else if (demandDecreasing && productionHighAgainstDemand) {
     title = 'Make Less to Reduce Waste'
-    reason = `${wasted} — about ${s.waste_pct}% of what was made. Sales are also slowing down.`
+    reason = `${wasted} — about ${Math.round(s.waste_pct as number)}% of what was made. Sales are also slowing down.`
     recommendedAction = 'Make fewer, or bake in smaller batches.'
   } else if (demandIncreasing) {
     title = 'Waste Even Though Sales Are Up'
-    reason = `${wasted} — about ${s.waste_pct}% of what was made, even though sales are going up.`
+    reason = `${wasted} — about ${Math.round(s.waste_pct as number)}% of what was made, even though sales are going up.`
     recommendedAction = 'Keep making enough to meet sales, but check batch sizes and how long items sit before they sell.'
   } else {
     title = 'Reduce Waste'
-    reason = `${wasted} — about ${s.waste_pct}% of what was made.`
+    reason = `${wasted} — about ${Math.round(s.waste_pct as number)}% of what was made.`
     recommendedAction = 'Check batch sizes and how long items sit before they sell.'
   }
 
@@ -835,7 +850,7 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
     'Made': `${s.production_quantity_in_window} units`,
     'Wasted': `${s.total_disposal} units`,
   }
-  if (!isZeroProduction) metrics['Share wasted'] = `${s.waste_pct}%`
+  if (!isZeroProduction) metrics['Share wasted'] = `${Math.round(s.waste_pct as number)}%`
   metrics['Value lost'] = `₱${s.disposal_value.toFixed(2)}`
 
   return {
@@ -859,14 +874,14 @@ function buildFastMovingRecommendation(productId: string, productName: string, d
     productId,
     productName,
     title: 'Selling Faster Than Usual',
-    reason: `${productName} has been selling more than usual (${lately(demand.ma3)}, compared to ${onAverage(demand.ma7)}).`,
+    reason: `${productName} has been selling more than usual (${salesSummary(demand)}).`,
     recommendedAction: 'Make sure you have enough in stock, and make more if it runs low.',
     metrics: {},
   }
 }
 
 function buildSlowMovingRecommendation(productId: string, productName: string, demand: DemandPattern): PrescriptiveRecommendation {
-  const noDemand = demand.ma3 === 0 && demand.ma7 === 0
+  const noDemand = demand.total7 === 0
 
   return {
     type: 'slow_moving',
@@ -875,8 +890,8 @@ function buildSlowMovingRecommendation(productId: string, productName: string, d
     productName,
     title: noDemand ? 'Not Selling' : 'Selling Slower Than Usual',
     reason: noDemand
-      ? `${productName} has not sold at all recently.`
-      : `${productName} has been selling less than usual (${lately(demand.ma3)}, compared to ${onAverage(demand.ma7)}).`,
+      ? `${productName} has not sold at all this past week.`
+      : `${productName} has been selling less than usual (${salesSummary(demand)}).`,
     recommendedAction: noDemand
       ? 'Decide whether to keep making it, promote it, or take it off the menu.'
       : 'Make smaller batches or run a promotion.',
@@ -917,16 +932,25 @@ async function getFastAndSlowMovingRecs(): Promise<PrescriptiveRecommendation[]>
       const dailySeries = buildOperationalDailySeries(dailyByProduct[product.id] || {}, ANALYSIS_WINDOW_DAYS)
       const demand = buildDemandPattern(dailySeries)
 
-      // Fast-moving requires an upward recent pattern and non-zero demand.
-      if (demand.ma7 > 0 && demand.ma3 > demand.ma7 && demand.trendDirection === 'increasing') {
+      // Fast-moving requires an upward recent pattern and enough sales to
+      // trust it (a single extra sale on a slow product is not a trend).
+      if (
+        demand.total7 >= MIN_UNITS_FOR_TREND &&
+        demand.ma3 > demand.ma7 &&
+        demand.trendDirection === 'increasing'
+      ) {
         results.push(buildFastMovingRecommendation(product.id, product.name, demand))
         return
       }
 
-      // Slow-moving is based on a downward pattern or sustained zero demand,
-      // rather than the previous fixed "<= 10 units/week" rule.
-      if ((demand.ma7 === 0 && demand.ma3 === 0) ||
-          (demand.ma7 > 0 && demand.ma3 < demand.ma7 && demand.trendDirection === 'decreasing')) {
+      // Slow-moving is either no sales at all this week, or a clear drop from
+      // a product that normally sells enough to tell the difference.
+      if (
+        demand.total7 === 0 ||
+        (demand.total7 >= MIN_UNITS_FOR_TREND &&
+          demand.ma3 < demand.ma7 &&
+          demand.trendDirection === 'decreasing')
+      ) {
         results.push(buildSlowMovingRecommendation(product.id, product.name, demand))
       }
     })
