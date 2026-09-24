@@ -190,8 +190,8 @@ const PRIORITY_STYLES: Record<RecommendationPriority, {
 const TYPE_LABELS: Record<RecommendationType, string> = {
   production: 'Production',
   waste: 'Waste Reduction',
+  fast_moving: 'Fast-Moving Product',
   slow_moving: 'Slow-Moving Product',
-  conflict: 'Conflict / Review',
 }
 
 // How many metrics to show collapsed before the "View details" toggle
@@ -205,7 +205,6 @@ function formatMetricValue(value: number | string | null): string {
 function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
   const [expanded, setExpanded] = useState(false)
   const styles = PRIORITY_STYLES[rec.priority]
-  const isConflict = rec.type === 'conflict'
   const isHigh = rec.priority === 'high'
 
   const metricEntries = Object.entries(rec.metrics)
@@ -216,51 +215,31 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
   return (
     <div
       className={`rounded-sm border overflow-hidden flex flex-col ${
-        isConflict
-          ? 'border-red-300 bg-white'
-          : isHigh
-          ? `${styles.border} ${styles.bg}`
-          : `${styles.border} bg-white`
+        isHigh ? `${styles.border} ${styles.bg}` : `${styles.border} bg-white`
       }`}
       style={{
-        boxShadow: isConflict
-          ? '0 0 0 1.5px #dc2626, 0 2px 8px rgba(220,38,38,0.10)'
-          : isHigh
+        boxShadow: isHigh
           ? '0 2px 8px rgba(0,0,0,0.08)'
           : '0 1px 4px rgba(0,0,0,0.06)',
       }}
     >
-      {/* ── Header row: priority + product name ── */}
-      <div
-        className={`px-3 py-2 flex items-center gap-2 border-b ${
-          isConflict ? 'bg-red-700 border-red-600' : styles.border
-        }`}
-      >
-        <span
-          className={`text-xs font-black px-1.5 py-0.5 rounded-sm tracking-wide shrink-0 ${
-            isConflict ? 'bg-red-900 text-red-200' : styles.badge
-          }`}
-        >
+      <div className={`px-3 py-2 flex items-center gap-2 border-b ${styles.border}`}>
+        <span className={`text-xs font-black px-1.5 py-0.5 rounded-sm tracking-wide shrink-0 ${styles.badge}`}>
           {rec.priority.toUpperCase()}
         </span>
         <span
-          className={`text-sm font-black truncate flex-1 min-w-0 ${
-            isConflict ? 'text-white' : 'text-gray-800'
-          }`}
+          className="text-sm font-black truncate flex-1 min-w-0 text-gray-800"
           title={rec.productName}
         >
           {rec.productName}
         </span>
       </div>
 
-      {/* ── Body ── */}
       <div className="px-3 py-3 flex flex-col gap-2 flex-1">
-        {/* Title */}
-        <p className={`font-black text-sm leading-tight ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+        <p className="font-black text-sm leading-tight text-gray-900">
           {rec.title}
         </p>
 
-        {/* Key metrics — always visible */}
         {previewMetrics.length > 0 && (
           <div className="flex flex-wrap gap-x-4 gap-y-0.5">
             {previewMetrics.map(([key, val]) => (
@@ -272,7 +251,6 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
           </div>
         )}
 
-        {/* Expanded: remaining metrics + reason */}
         {expanded && (
           <div className="flex flex-col gap-2">
             {extraMetrics.length > 0 && (
@@ -289,26 +267,18 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
           </div>
         )}
 
-        {/* Recommended action — always visible */}
         <div
-          className={`px-2.5 py-2 rounded-sm border-l-4 mt-auto ${
-            isConflict ? 'bg-red-50 border-red-400' : 'bg-white border-yellow-400'
-          }`}
+          className="px-2.5 py-2 rounded-sm border-l-4 mt-auto bg-white border-yellow-400"
           style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
         >
-          <p className={`text-xs font-black leading-snug ${isConflict ? 'text-red-800' : 'text-gray-900'}`}>
+          <p className="text-xs font-black leading-snug text-gray-900">
             {rec.recommendedAction}
           </p>
         </div>
 
-        {/* Expand / collapse toggle */}
         <button
           onClick={() => setExpanded(v => !v)}
-          className={`text-xs font-bold self-start mt-0.5 transition-colors ${
-            isConflict
-              ? 'text-red-500 hover:text-red-700'
-              : 'text-gray-400 hover:text-gray-600'
-          }`}
+          className="text-xs font-bold self-start mt-0.5 transition-colors text-gray-400 hover:text-gray-600"
         >
           {expanded ? '▲ Hide details' : `▼ View details${hasExtra ? ` (+${extraMetrics.length} metrics)` : ''}`}
         </button>
@@ -320,10 +290,10 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
 // ─── TYPE GROUP (heading + 2-col grid of cards) ──────────────────
 
 const TYPE_GROUP_META: Record<RecommendationType, { label: string; icon: string }> = {
-  production:   { label: 'Production',          icon: '⚙️' },
-  waste:        { label: 'Waste Reduction',      icon: '♻️' },
-  slow_moving:  { label: 'Slow-Moving Products', icon: '📦' },
-  conflict:     { label: 'Conflicting Signals',  icon: '⚠️' },
+  production:  { label: 'Production',           icon: '⚙️' },
+  waste:       { label: 'Waste Reduction',       icon: '♻️' },
+  fast_moving: { label: 'Fast-Moving Products',  icon: '📈' },
+  slow_moving: { label: 'Slow-Moving Products',  icon: '📦' },
 }
 
 function RecommendationGroup({
@@ -335,29 +305,19 @@ function RecommendationGroup({
 }) {
   if (recs.length === 0) return null
   const meta = TYPE_GROUP_META[type]
-  const isConflict = type === 'conflict'
 
   return (
     <div>
-      {/* Group heading */}
-      <div className={`flex items-center gap-2 mb-3 pb-2 border-b ${isConflict ? 'border-red-200' : 'border-gray-100'}`}>
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-100">
         <span className="text-base leading-none">{meta.icon}</span>
-        <h4 className={`text-sm font-black ${isConflict ? 'text-red-700' : 'text-gray-700'}`}>
+        <h4 className="text-sm font-black text-gray-700">
           {meta.label}
         </h4>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-          isConflict ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'
-        }`}>
+        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
           {recs.length}
         </span>
-        {isConflict && (
-          <span className="text-xs text-red-500 font-semibold ml-1">
-            — review before acting
-          </span>
-        )}
       </div>
 
-      {/* 2-column responsive grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {recs.map(rec => (
           <RecommendationCard key={`${rec.type}-${rec.productId}`} rec={rec} />
@@ -373,60 +333,57 @@ type PriorityFilter = 'all' | RecommendationPriority
 type TypeFilter = 'all' | RecommendationType
 
 function RecommendationFilters({ recs }: { recs: PrescriptiveRecommendation[] }) {
-  // Default to 'high' so the manager sees urgent items immediately
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('high')
-  const [typeFilter, setTypeFilter]         = useState<TypeFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
 
-  // Counts always reflect the full unfiltered list — badges never change when a filter is active
   const priorityCounts = {
-    all:    recs.length,
-    high:   recs.filter(r => r.priority === 'high').length,
+    all: recs.length,
+    high: recs.filter(r => r.priority === 'high').length,
     medium: recs.filter(r => r.priority === 'medium').length,
-    low:    recs.filter(r => r.priority === 'low').length,
-  }
-  const typeCounts: Record<TypeFilter, number> = {
-    all:         recs.length,
-    production:  recs.filter(r => r.type === 'production').length,
-    waste:       recs.filter(r => r.type === 'waste').length,
-    slow_moving: recs.filter(r => r.type === 'slow_moving').length,
-    conflict:    recs.filter(r => r.type === 'conflict').length,
+    low: recs.filter(r => r.priority === 'low').length,
   }
 
-  // Apply both filters together
+  const typeCounts: Record<TypeFilter, number> = {
+    all: recs.length,
+    production: recs.filter(r => r.type === 'production').length,
+    waste: recs.filter(r => r.type === 'waste').length,
+    fast_moving: recs.filter(r => r.type === 'fast_moving').length,
+    slow_moving: recs.filter(r => r.type === 'slow_moving').length,
+  }
+
   const filtered = recs.filter(r => {
     const priorityOk = priorityFilter === 'all' || r.priority === priorityFilter
-    const typeOk     = typeFilter === 'all'     || r.type === typeFilter
+    const typeOk = typeFilter === 'all' || r.type === typeFilter
     return priorityOk && typeOk
   })
 
-  // Group filtered list by type for display
-  const TYPE_ORDER: RecommendationType[] = ['conflict', 'production', 'waste', 'slow_moving']
+  const TYPE_ORDER: RecommendationType[] = ['production', 'waste', 'fast_moving', 'slow_moving']
   const byType = TYPE_ORDER.reduce<Record<RecommendationType, PrescriptiveRecommendation[]>>(
     (acc, t) => ({ ...acc, [t]: filtered.filter(r => r.type === t) }),
     {} as Record<RecommendationType, PrescriptiveRecommendation[]>
   )
 
-  // Priority pill — active style uses semantic colour, inactive uses ghost
   function priorityPillClass(key: PriorityFilter): string {
     return priorityFilter === key
       ? 'text-white'
       : 'bg-white text-gray-600 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
   }
+
   function priorityPillStyle(key: PriorityFilter): React.CSSProperties {
     if (priorityFilter !== key) return { boxShadow: '2px 2px 7px rgba(0,0,0,0.08)' }
-    if (key === 'all')    return { backgroundColor: '#220901' }
-    if (key === 'high')   return { backgroundColor: '#b91c1c' }
+    if (key === 'all') return { backgroundColor: '#220901' }
+    if (key === 'high') return { backgroundColor: '#b91c1c' }
     if (key === 'medium') return { backgroundColor: '#ca8a04' }
-    if (key === 'low')    return { backgroundColor: '#6b7280' }
+    if (key === 'low') return { backgroundColor: '#6b7280' }
     return {}
   }
 
-  // Type pill — active uses brand navy (matches existing period-selector active state)
   function typePillClass(key: TypeFilter): string {
     return typeFilter === key
       ? 'text-white'
       : 'bg-white text-gray-600 border border-gray-200 hover:text-gray-800 hover:border-gray-300'
   }
+
   function typePillStyle(key: TypeFilter): React.CSSProperties {
     return typeFilter === key
       ? { backgroundColor: '#1a2340' }
@@ -434,23 +391,22 @@ function RecommendationFilters({ recs }: { recs: PrescriptiveRecommendation[] })
   }
 
   const PRIORITY_PILLS: { key: PriorityFilter; label: string }[] = [
-    { key: 'all',    label: `All ${priorityCounts.all}` },
-    { key: 'high',   label: `High ${priorityCounts.high}` },
+    { key: 'all', label: `All ${priorityCounts.all}` },
+    { key: 'high', label: `High ${priorityCounts.high}` },
     { key: 'medium', label: `Medium ${priorityCounts.medium}` },
-    { key: 'low',    label: `Low ${priorityCounts.low}` },
+    { key: 'low', label: `Low ${priorityCounts.low}` },
   ]
 
   const TYPE_PILLS: { key: TypeFilter; label: string }[] = [
-    { key: 'all',         label: 'All Types' },
-    { key: 'production',  label: `Production ${typeCounts.production}` },
-    { key: 'waste',       label: `Waste Reduction ${typeCounts.waste}` },
+    { key: 'all', label: 'All Types' },
+    { key: 'production', label: `Production ${typeCounts.production}` },
+    { key: 'waste', label: `Waste Reduction ${typeCounts.waste}` },
+    { key: 'fast_moving', label: `Fast-Moving ${typeCounts.fast_moving}` },
     { key: 'slow_moving', label: `Slow-Moving ${typeCounts.slow_moving}` },
-    { key: 'conflict',    label: `Conflicts ${typeCounts.conflict}` },
   ]
 
   return (
     <div>
-      {/* Row 1: priority filters */}
       <div className="flex flex-wrap gap-2 mb-2">
         {PRIORITY_PILLS.map(({ key, label }) => (
           <button
@@ -464,7 +420,6 @@ function RecommendationFilters({ recs }: { recs: PrescriptiveRecommendation[] })
         ))}
       </div>
 
-      {/* Row 2: type filters */}
       <div className="flex flex-wrap gap-2 mb-5">
         {TYPE_PILLS.map(({ key, label }) => (
           <button
@@ -478,7 +433,6 @@ function RecommendationFilters({ recs }: { recs: PrescriptiveRecommendation[] })
         ))}
       </div>
 
-      {/* Filtered results */}
       {filtered.length === 0 ? (
         <div className="py-8 text-center">
           <p className="text-sm font-bold text-gray-500">No recommendations match this filter.</p>
@@ -1208,7 +1162,7 @@ export default function AnalyticsPage() {
                   <h3 className="font-black text-gray-900">Operational Recommendations</h3>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Production, waste reduction, slow-moving products, and conflict signals — based on the last 7 days.
+                  Production, waste reduction, and demand-pattern signals — based on the last 7 days.
                 </p>
               </div>
 
@@ -1217,7 +1171,7 @@ export default function AnalyticsPage() {
                 {prescriptiveLoading && (
                   <div className="flex items-center justify-center py-12 gap-3">
                     <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
-                    <p className="text-sm text-gray-400 font-semibold">Analyzing production and waste data…</p>
+                    <p className="text-sm text-gray-400 font-semibold">Analyzing production, waste, and demand patterns…</p>
                   </div>
                 )}
 
