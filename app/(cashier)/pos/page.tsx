@@ -11,6 +11,7 @@ import {
 } from '@/lib/reservations'
 import {
   createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal, getEffectivePrice,
+  getCartTotal, getPwdSeniorDiscountAmount,
   type CartItem, type SalesStats,
 } from '@/lib/sales'
 import type { Product } from '@/lib/supabase'
@@ -49,6 +50,7 @@ export default function POSPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash')
+  const [pwdSeniorDiscount, setPwdSeniorDiscount] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [stats, setStats] = useState<SalesStats | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
@@ -80,7 +82,7 @@ export default function POSPage() {
   const [customerPhone, setCustomerPhone] = useState('')
 
   useEffect(() => { checkAuth() }, [])
-  useEffect(() => { setCashReceived('') }, [paymentMethod, cart.length])
+  useEffect(() => { setCashReceived('') }, [paymentMethod, cart.length, pwdSeniorDiscount])
   useRealtimeRefresh(['products', 'sales', 'sale_items'], loadData)
 
   async function checkAuth() {
@@ -193,7 +195,7 @@ export default function POSPage() {
     setCart(cart.filter(item => item.product.id !== productId))
   }
 
-  function clearCart() { setCart([]) }
+  function clearCart() { setCart([]); setPwdSeniorDiscount(false) }
 
   async function processPayment() {
     if (cart.length === 0) { setError('Cart is empty'); setTimeout(() => setError(''), 3000); return }
@@ -206,7 +208,7 @@ export default function POSPage() {
         setTimeout(() => setError(''), 3000)
         return
       }
-      if (tenderedNum! < cartTotal) {
+      if (tenderedNum! < finalTotal) {
         setError('Amount received is less than the total')
         setTimeout(() => setError(''), 3000)
         return
@@ -216,7 +218,7 @@ export default function POSPage() {
     setProcessing(true); setError('')
     try {
       const cartSnapshot = cart
-      const sale = await createSale(cartSnapshot, paymentMethod, userId, tenderedNum)
+      const sale = await createSale(cartSnapshot, paymentMethod, userId, tenderedNum, pwdSeniorDiscount)
 
       // Fetch only the sale row (no joins) to get DB-generated sale_number and sale_date.
       // The profiles join silently returns null when PostgREST doesn't recognise the FK,
@@ -350,6 +352,8 @@ export default function POSPage() {
   const handleLogout = async () => { await signOut(); router.push('/login') }
 
   const cartTotal = cart.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+  const pwdSeniorDiscountAmount = pwdSeniorDiscount ? getPwdSeniorDiscountAmount(cart) : 0
+  const finalTotal = getCartTotal(cart, pwdSeniorDiscount)
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const filteredProducts = searchQuery
     ? products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -560,10 +564,51 @@ export default function POSPage() {
                   </span>
                 </div>
               )}
+
+              {/* PWD / Senior Citizen Discount toggle */}
+              <button
+                onClick={() => setPwdSeniorDiscount(v => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-sm border-2 mb-3 transition-colors"
+                style={pwdSeniorDiscount
+                  ? { borderColor: '#D97706', backgroundColor: '#FEF3C7' }
+                  : { borderColor: '#e5e7eb', backgroundColor: 'white' }
+                }
+              >
+                <span className="text-xs font-bold" style={{ color: pwdSeniorDiscount ? '#92400E' : '#374151' }}>
+                  🪪 PWD / Senior Citizen (5% off)
+                </span>
+                <span
+                  className="w-9 h-5 rounded-full relative shrink-0 transition-colors"
+                  style={{ backgroundColor: pwdSeniorDiscount ? '#D97706' : '#d1d5db' }}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+                    style={{ transform: pwdSeniorDiscount ? 'translateX(18px)' : 'translateX(2px)' }}
+                  />
+                </span>
+              </button>
+
+              {pwdSeniorDiscount && (
+                <div className="flex justify-between text-xs font-bold mb-2 px-1">
+                  <span style={{ color: '#92400E' }}>Subtotal</span>
+                  <span className="text-gray-500">
+                    ₱{cartTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              {pwdSeniorDiscount && (
+                <div className="flex justify-between text-xs font-bold mb-2 px-1">
+                  <span style={{ color: '#92400E' }}>PWD/Senior Discount (5%)</span>
+                  <span style={{ color: '#D97706' }}>
+                    -₱{pwdSeniorDiscountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
                 <span className="font-black text-gray-900 text-lg">Total</span>
                 <span className="font-black text-2xl" style={{ color: '#7B1111' }}>
-                  ₱{cartTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  ₱{finalTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-2 mb-3">
@@ -599,9 +644,9 @@ export default function POSPage() {
                       <span className="text-xs font-bold text-gray-500">Change</span>
                       <span
                         className="text-lg font-black"
-                        style={{ color: parseFloat(cashReceived) < cartTotal ? '#EF4444' : '#10B981' }}
+                        style={{ color: parseFloat(cashReceived) < finalTotal ? '#EF4444' : '#10B981' }}
                       >
-                        ₱{(parseFloat(cashReceived) - cartTotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        ₱{(parseFloat(cashReceived) - finalTotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   )}
@@ -623,14 +668,14 @@ export default function POSPage() {
               )}
 
               <button onClick={processPayment}
-                disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < cartTotal))}
+                disabled={processing || (paymentMethod === 'cash' && (!cashReceived || parseFloat(cashReceived) < finalTotal))}
                 className="w-full py-3 rounded-sm font-black text-white text-base disabled:opacity-50 mb-2 transition-colors"
                 style={{ backgroundColor: paymentMethod === 'online' ? '#1a2340' : '#10B981' }}>
                 {processing
                   ? 'Processing...'
                   : paymentMethod === 'online'
-                    ? `Confirm Online ₱${cartTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                    : `Charge ₱${cartTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    ? `Confirm Online ₱${finalTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    : `Charge ₱${finalTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                 }
               </button>
               <button onClick={clearCart}

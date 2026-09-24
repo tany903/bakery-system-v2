@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import type { Sale, SaleItem, Product } from './supabase'
 
+export const PWD_SENIOR_DISCOUNT_RATE = 0.05
+
 export interface CartItem {
   product: Product
   quantity: number
@@ -37,6 +39,18 @@ export function getItemSubtotal(item: CartItem): number {
   return getEffectivePrice(item) * item.quantity
 }
 
+// Whole-cart PWD/Senior Citizen discount: 5% off the cart's raw total
+// (i.e. after any per-item Day-Old/custom discounts, before this one).
+export function getPwdSeniorDiscountAmount(items: CartItem[]): number {
+  const rawTotal = items.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+  return rawTotal * PWD_SENIOR_DISCOUNT_RATE
+}
+
+export function getCartTotal(items: CartItem[], pwdSeniorDiscount = false): number {
+  const rawTotal = items.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+  return pwdSeniorDiscount ? rawTotal - rawTotal * PWD_SENIOR_DISCOUNT_RATE : rawTotal
+}
+
 export async function getMaxDiscountPct(): Promise<number> {
   const { data } = await supabase
     .from('settings')
@@ -54,9 +68,13 @@ export async function createSale(
   items: CartItem[],
   paymentMethod: 'cash' | 'online',
   cashierId: string,
-  amountTendered?: number
+  amountTendered?: number,
+  pwdSeniorDiscount = false
 ): Promise<Sale> {
-  const totalAmount = items.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+  const rawTotal = items.reduce((sum, item) => sum + getItemSubtotal(item), 0)
+  const totalAmount = pwdSeniorDiscount
+    ? rawTotal - rawTotal * PWD_SENIOR_DISCOUNT_RATE
+    : rawTotal
 
   // Only cash sales track tendered/change. Online payments leave both null.
   const tendered = paymentMethod === 'cash' && amountTendered !== undefined

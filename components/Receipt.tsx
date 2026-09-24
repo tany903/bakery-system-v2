@@ -18,10 +18,14 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
     sale.amount_tendered !== null &&
     sale.amount_tendered !== undefined
 
-  // Prices are VAT-inclusive, so the net (VAT-exclusive) amount is always
-  // Total Gross ÷ 1.12 — the same formula whether the sale is VATable,
-  // VAT-Exempt, or Zero-Rated. Only the VAT actually charged differs:
-  // VATable sales carry 12% VAT; Exempt and Zero-Rated sales carry none.
+  // Raw items total (before any whole-cart PWD/Senior discount) vs the
+  // sale's actual total tells us the discount amount, with no extra column.
+  const itemsRawTotal = sale.sale_items.reduce((sum, item) => sum + item.subtotal, 0)
+  const pwdSeniorDiscountAmount = Math.max(0, itemsRawTotal - sale.total_amount)
+  const hasPwdSeniorDiscount = pwdSeniorDiscountAmount > 0.005
+
+  // Prices are VAT-inclusive, so the net (VAT-exclusive) amount is
+  // Total Gross ÷ 1.12, computed off the final (already-discounted) total.
   const netAmount = sale.total_amount / (1 + VAT_RATE)
   const vatAmount = sale.total_amount - netAmount
 
@@ -66,6 +70,10 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
               display: flex;
               justify-content: space-between;
               margin: 5px 0;
+            }
+            .discount-line {
+              margin-top: 6px;
+              font-size: 13px;
             }
             .vat-breakdown {
               margin-top: 8px;
@@ -161,19 +169,25 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
             ))}
           </div>
 
+          {/* PWD/Senior Discount */}
+          {hasPwdSeniorDiscount && (
+            <div className="discount-line flex justify-between">
+              <span style={{ color: '#555555' }}>Subtotal:</span>
+              <span style={{ color: '#111111' }}>₱{itemsRawTotal.toFixed(2)}</span>
+            </div>
+          )}
+          {hasPwdSeniorDiscount && (
+            <div className="discount-line flex justify-between">
+              <span style={{ color: '#D97706' }} className="font-bold">PWD/Senior Discount (5%):</span>
+              <span style={{ color: '#D97706' }} className="font-bold">-₱{pwdSeniorDiscountAmount.toFixed(2)}</span>
+            </div>
+          )}
+
           {/* VAT Breakdown */}
           <div className="vat-breakdown space-y-1 text-sm">
             <div className="flex justify-between">
               <span style={{ color: '#555555' }}>VATable Sales:</span>
               <span style={{ color: '#111111' }}>₱{netAmount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span style={{ color: '#555555' }}>VAT-Exempt Sales:</span>
-              <span style={{ color: '#111111' }}>₱0.00</span>
-            </div>
-            <div className="flex justify-between">
-              <span style={{ color: '#555555' }}>Zero-Rated Sales:</span>
-              <span style={{ color: '#111111' }}>₱0.00</span>
             </div>
             <div className="flex justify-between">
               <span style={{ color: '#555555' }}>VAT (12%):</span>
