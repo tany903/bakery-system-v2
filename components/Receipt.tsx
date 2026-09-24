@@ -18,10 +18,12 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
     sale.amount_tendered !== null &&
     sale.amount_tendered !== undefined
 
-  // Prices are VAT-inclusive, so back out the VATable sales and VAT amount
-  // from the total for the standard BIR-style breakdown on the receipt.
-  const vatableSales = sale.total_amount / (1 + VAT_RATE)
-  const vatAmount = sale.total_amount - vatableSales
+  // Prices are VAT-inclusive, so the net (VAT-exclusive) amount is always
+  // Total Gross ÷ 1.12 — the same formula whether the sale is VATable,
+  // VAT-Exempt, or Zero-Rated. Only the VAT actually charged differs:
+  // VATable sales carry 12% VAT; Exempt and Zero-Rated sales carry none.
+  const netAmount = sale.total_amount / (1 + VAT_RATE)
+  const vatAmount = sale.total_amount - netAmount
 
   const handlePrint = () => {
     const printContent = receiptRef.current
@@ -163,7 +165,15 @@ export default function Receipt({ sale, onClose }: ReceiptProps) {
           <div className="vat-breakdown space-y-1 text-sm">
             <div className="flex justify-between">
               <span style={{ color: '#555555' }}>VATable Sales:</span>
-              <span style={{ color: '#111111' }}>₱{vatableSales.toFixed(2)}</span>
+              <span style={{ color: '#111111' }}>₱{netAmount.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: '#555555' }}>VAT-Exempt Sales:</span>
+              <span style={{ color: '#111111' }}>₱0.00</span>
+            </div>
+            <div className="flex justify-between">
+              <span style={{ color: '#555555' }}>Zero-Rated Sales:</span>
+              <span style={{ color: '#111111' }}>₱0.00</span>
             </div>
             <div className="flex justify-between">
               <span style={{ color: '#555555' }}>VAT (12%):</span>
