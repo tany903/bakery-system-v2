@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { getCurrentUser, getUserProfile } from '@/lib/auth'
 import { getUpcomingReservations, markReservationReady, type ReservationWithDetails } from '@/lib/reservations'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
@@ -14,7 +15,8 @@ const DISMISSED_KEY = 'dismissed-reservation-alarms'
 const CLOCK_TICK_MS = 15000
 
 export function useReservationAlarms() {
-  const [enabled, setEnabled] = useState(false) // only true once we know the user is 'production'
+  const pathname = usePathname()
+  const [enabled, setEnabled] = useState(false) // only true once we know the SIGNED-IN user is 'production'
   const [reservations, setReservations] = useState<ReservationWithDetails[]>([])
   const [now, setNow] = useState(() => Date.now())
   const [dismissedIds, setDismissedIds] = useState<string[]>([])
@@ -22,17 +24,20 @@ export function useReservationAlarms() {
   const [soundReady, setSoundReady] = useState(false)
   const audioCtxRef = useRef<AudioContext | null>(null)
 
-  // Figure out, once, whether this signed-in user should see pickup alarms at all.
+  // Re-check on every route change (not just once on mount) — this is what makes the
+  // alarm disappear immediately on logout instead of surviving with stale state on /login.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       const user = await getCurrentUser()
-      if (!user || cancelled) return
+      if (cancelled) return
+      if (!user) { setEnabled(false); return }
       const profile = await getUserProfile(user.id)
-      if (!cancelled && profile?.role === 'production') setEnabled(true)
+      if (cancelled) return
+      setEnabled(profile?.role === 'production')
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [pathname])
 
   async function loadReservations() {
     try {
@@ -44,7 +49,7 @@ export function useReservationAlarms() {
   }
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) { setReservations([]); return }
     loadReservations()
   }, [enabled])
 

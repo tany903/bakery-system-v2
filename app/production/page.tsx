@@ -25,7 +25,7 @@ import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
 import LogoutButton from '@/components/LogoutButton'
 
-// ─── ADVANCE ORDER HELPERS (panel only — the alarm popup now lives in ReservationAlarmToast) ─
+// ─── ADVANCE ORDER HELPERS (panel only — the alarm popup lives globally in ReservationAlarmToast) ─
 
 function formatDuration(totalMinutes: number): string {
   if (totalMinutes < 60) return `${totalMinutes} min`
@@ -142,7 +142,7 @@ export default function ProductionDashboardPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [error, setError] = useState('')
 
-  // Advance orders panel (the alarm popup + sound now live globally in ReservationAlarmToast)
+  // Advance orders panel (the alarm popup + sound live globally in ReservationAlarmToast)
   const [reservations, setReservations] = useState<ReservationWithDetails[]>([])
   const [now, setNow] = useState(() => Date.now())
   const [markingId, setMarkingId] = useState<string | null>(null)
@@ -482,14 +482,14 @@ const productionNavLinks = [
           {Branding()}
           <div className="flex gap-2">
             {productionNavLinks.map(link => (
-              <a key={link.label} href={link.href}
+              <Link key={link.label} href={link.href}
                 className="px-4 py-1.5 rounded-sm text-xs font-bold no-underline transition-colors"
                 style={link.active
                   ? { backgroundColor: '#F5A623', color: '#7B1111' }
                   : { backgroundColor: 'rgba(255,255,255,0.15)', color: 'white' }
                 }>
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
           <div className="ml-auto"><LogoutButton onLogout={handleLogout} /></div>        </div>
