@@ -768,9 +768,6 @@ function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecomme
       ? `Increase production toward approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day and monitor the next demand pattern.`
       : `Reduce production toward approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day and monitor demand before increasing output again.`,
     metrics: {
-      'MA3 demand': `${s.demand.ma3} units/day`,
-      'MA7 demand': `${s.demand.ma7} units/day`,
-      'Demand trend': s.demand.trendPct === null ? 'N/A' : `${s.demand.trendPct}%`,
       'Recent production': `${s.recent_production} units/day`,
       'Production trend': s.production_trend_pct === null ? 'N/A' : `${s.production_trend_pct}%`,
     },
@@ -817,9 +814,6 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
       : `${s.product_name} has a ${s.waste_pct}% waste-to-production rate. The recommendation also considers the current demand and production patterns before suggesting an action.`,
     recommendedAction,
     metrics: {
-      'MA3 demand': s.demand ? `${s.demand.ma3} units/day` : 'N/A',
-      'MA7 demand': s.demand ? `${s.demand.ma7} units/day` : 'N/A',
-      'Demand trend': s.demand?.trendPct === null || s.demand?.trendPct === undefined ? 'N/A' : `${s.demand.trendPct}%`,
       'Produced': `${s.production_quantity_in_window} units`,
       'Total waste': `${s.total_disposal} units`,
       'Waste rate': isZeroProduction ? 'N/A' : `${s.waste_pct}%`,
@@ -838,11 +832,7 @@ function buildFastMovingRecommendation(productId: string, productName: string, d
     title: 'Fast-Moving Product',
     reason: `${productName} shows an increasing recent demand pattern, with the latest 3-day moving average above the 7-day moving average.`,
     recommendedAction: 'Maintain sufficient stock and consider increasing production or replenishment to keep up with the current demand pattern.',
-    metrics: {
-      'MA3 demand': `${demand.ma3} units/day`,
-      'MA7 demand': `${demand.ma7} units/day`,
-      'Demand trend': demand.trendPct === null ? 'N/A' : `${demand.trendPct}%`,
-    },
+    metrics: {},
   }
 }
 
@@ -862,11 +852,7 @@ function buildSlowMovingRecommendation(productId: string, productName: string, d
     recommendedAction: noDemand
       ? 'Review whether to pause production, promotion, or continued offering of this product.'
       : 'Consider reducing production, adjusting the batch size, or running a promotion while monitoring the demand pattern.',
-    metrics: {
-      'MA3 demand': `${demand.ma3} units/day`,
-      'MA7 demand': `${demand.ma7} units/day`,
-      'Demand trend': demand.trendPct === null ? 'N/A' : `${demand.trendPct}%`,
-    },
+    metrics: {},
   }
 }
 
