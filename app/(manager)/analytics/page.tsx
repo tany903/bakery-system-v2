@@ -194,23 +194,18 @@ const TYPE_LABELS: Record<RecommendationType, string> = {
   slow_moving: 'Slow-Moving Product',
 }
 
-// How many metrics to show collapsed before the "View details" toggle
-const METRICS_PREVIEW_COUNT = 2
-
 function formatMetricValue(value: number | string | null): string {
   if (value === null) return '—'
   return String(value)
 }
 
 function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
-  const [expanded, setExpanded] = useState(false)
+  const [showNumbers, setShowNumbers] = useState(false)
   const styles = PRIORITY_STYLES[rec.priority]
   const isHigh = rec.priority === 'high'
 
   const metricEntries = Object.entries(rec.metrics)
-  const previewMetrics = metricEntries.slice(0, METRICS_PREVIEW_COUNT)
-  const extraMetrics = metricEntries.slice(METRICS_PREVIEW_COUNT)
-  const hasExtra = extraMetrics.length > 0
+  const hasMetrics = metricEntries.length > 0
 
   return (
     <div
@@ -240,30 +235,16 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
           {rec.title}
         </p>
 
-        {previewMetrics.length > 0 && (
+        <p className="text-xs text-gray-500 leading-relaxed">{rec.reason}</p>
+
+        {showNumbers && hasMetrics && (
           <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-            {previewMetrics.map(([key, val]) => (
+            {metricEntries.map(([key, val]) => (
               <span key={key} className="text-xs text-gray-500">
                 <span className="font-semibold text-gray-400">{key}:</span>{' '}
                 <span className="font-black text-gray-700">{formatMetricValue(val)}</span>
               </span>
             ))}
-          </div>
-        )}
-
-        {expanded && (
-          <div className="flex flex-col gap-2">
-            {extraMetrics.length > 0 && (
-              <div className="flex flex-wrap gap-x-4 gap-y-0.5">
-                {extraMetrics.map(([key, val]) => (
-                  <span key={key} className="text-xs text-gray-500">
-                    <span className="font-semibold text-gray-400">{key}:</span>{' '}
-                    <span className="font-black text-gray-700">{formatMetricValue(val)}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-gray-500 leading-relaxed">{rec.reason}</p>
           </div>
         )}
 
@@ -276,12 +257,14 @@ function RecommendationCard({ rec }: { rec: PrescriptiveRecommendation }) {
           </p>
         </div>
 
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="text-xs font-bold self-start mt-0.5 transition-colors text-gray-400 hover:text-gray-600"
-        >
-          {expanded ? '▲ Hide details' : `▼ View details${hasExtra ? ` (+${extraMetrics.length} metrics)` : ''}`}
-        </button>
+        {hasMetrics && (
+          <button
+            onClick={() => setShowNumbers(v => !v)}
+            className="text-xs font-bold self-start mt-0.5 transition-colors text-gray-400 hover:text-gray-600"
+          >
+            {showNumbers ? '▲ Hide numbers' : '▼ Show numbers'}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -1162,7 +1145,7 @@ export default function AnalyticsPage() {
                   <h3 className="font-black text-gray-900">Operational Recommendations</h3>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Production, waste reduction, and demand-pattern signals — based on the last 7 days.
+                  What to make more or less of, what is going to waste, and what is selling fast or slow.
                 </p>
               </div>
 
@@ -1171,7 +1154,7 @@ export default function AnalyticsPage() {
                 {prescriptiveLoading && (
                   <div className="flex items-center justify-center py-12 gap-3">
                     <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-600 animate-spin" />
-                    <p className="text-sm text-gray-400 font-semibold">Analyzing production, waste, and demand patterns…</p>
+                    <p className="text-sm text-gray-400 font-semibold">Checking your latest sales and production…</p>
                   </div>
                 )}
 
@@ -1191,7 +1174,7 @@ export default function AnalyticsPage() {
                   <div className="text-center py-12">
                     <div className="text-4xl mb-3">✅</div>
                     <p className="text-base font-black text-gray-700">No new operational recommendations at this time.</p>
-                    <p className="text-sm text-gray-400 mt-1">Production, waste, and sales levels look balanced for the last 7 days.</p>
+                    <p className="text-sm text-gray-400 mt-1">What you make, what goes to waste, and what you sell all look balanced right now.</p>
                   </div>
                 )}
 

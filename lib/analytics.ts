@@ -750,29 +750,48 @@ async function getWasteSignals(): Promise<Map<string, WasteSignal>> {
   return signals
 }
 
+// ---------------------------------------------------------------------
+// Plain-language helpers for the manager-facing recommendation cards
+// ---------------------------------------------------------------------
+
+function lately(n: number): string {
+  return n === 0 ? 'none lately' : `about ${n} a day lately`
+}
+
+function onAverage(n: number): string {
+  return `about ${n} a day on average`
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n !== 1 ? 's' : ''}`
+}
+
+// ---- Production ------------------------------------------------------
+
 function buildProductionRecommendation(s: ProductionSignal): PrescriptiveRecommendation {
-  const trendLabel = s.demand.trendPct === null
-    ? 'insufficient baseline for a percentage trend'
-    : `${s.demand.trendPct > 0 ? '+' : ''}${s.demand.trendPct}% recent-vs-7-day demand trend`
+  const n = s.recommended_daily_production
+  const increase = s.direction === 'increase'
 
   return {
     type: 'production',
     priority: s.priority,
     productId: s.product_id,
     productName: s.product_name,
-    title: s.direction === 'increase' ? 'Increase Production' : 'Decrease Production',
-    reason: s.direction === 'increase'
-      ? `${s.product_name} shows increasing recent demand (${trendLabel}), while recent production is not keeping pace with the short-term demand pattern.`
-      : `${s.product_name} shows declining recent demand (${trendLabel}), while recent production is still above the short-term demand pattern.`,
-    recommendedAction: s.direction === 'increase'
-      ? `Increase production toward approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day and monitor the next demand pattern.`
-      : `Reduce production toward approximately ${s.recommended_daily_production} unit${s.recommended_daily_production !== 1 ? 's' : ''}/day and monitor demand before increasing output again.`,
+    title: increase ? 'Make More' : 'Make Less',
+    reason: increase
+      ? `${s.product_name} is selling more than usual (${lately(s.demand.ma3)}, compared to ${onAverage(s.demand.ma7)}), but not enough is being made to keep up.`
+      : `${s.product_name} is selling less than usual (${lately(s.demand.ma3)}, compared to ${onAverage(s.demand.ma7)}), but more than that is still being made.`,
+    recommendedAction: increase
+      ? `Make about ${n} a day to keep up with sales.`
+      : `Cut back to about ${n} a day so less goes unsold.`,
     metrics: {
-      'Recent production': `${s.recent_production} units/day`,
-      'Production trend': s.production_trend_pct === null ? 'N/A' : `${s.production_trend_pct}%`,
+      'Selling lately': `${s.demand.ma3} a day`,
+      'Made lately': `${s.recent_production} a day`,
     },
   }
 }
+
+// ---- Waste -----------------------------------------------------------
 
 function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
   const isZeroProduction = s.waste_pct === null
@@ -781,25 +800,43 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
   const demandDecreasing = s.demand?.trendDirection === 'decreasing'
   const productionHighAgainstDemand = s.avg_daily_production > (s.demand?.ma3 ?? 0)
 
-  let title = 'Review Waste Pattern'
-  let recommendedAction = 'Review disposal records, production scheduling, and storage or expiry handling before changing production.'
+  const wasted =
+    `${plural(s.total_disposal, 'unit')} of ${s.product_name} ` +
+    `${s.total_disposal === 1 ? 'was' : 'were'} thrown away or given away recently ` +
+    `(₱${s.disposal_value.toFixed(2)})`
+
+  let title: string
+  let reason: string
+  let recommendedAction: string
 
   if (isResaleZeroProduction) {
-    title = 'Review Resale Item Waste'
-    recommendedAction = 'Review receiving/purchase records and check storage conditions or expiry handling for this resale item.'
+    title = 'Check Resale Item Waste'
+    reason = `${wasted}. This is a resale item.`
+    recommendedAction = 'Check how it is stored, when it expires, and how much you are buying in.'
   } else if (isZeroProduction) {
-    title = 'Investigate Waste — No Matching Production'
-    recommendedAction = 'Review the disposal records and production logs before adjusting production.'
+    title = 'Waste With No Production Record'
+    reason = `${wasted}, but no production was recorded for it.`
+    recommendedAction = 'Check the disposal and production records for missing or wrong entries.'
   } else if (demandDecreasing && productionHighAgainstDemand) {
-    title = 'Reduce Production to Limit Waste'
-    recommendedAction = 'Reduce production toward current demand and review batch size or production scheduling.'
+    title = 'Make Less to Reduce Waste'
+    reason = `${wasted} — about ${s.waste_pct}% of what was made. Sales are also slowing down.`
+    recommendedAction = 'Make fewer, or bake in smaller batches.'
   } else if (demandIncreasing) {
-    title = 'Review Waste While Demand Is Increasing'
-    recommendedAction = 'Keep production aligned with demand, but review batch size, production scheduling, storage, and expiry handling before increasing output further.'
+    title = 'Waste Even Though Sales Are Up'
+    reason = `${wasted} — about ${s.waste_pct}% of what was made, even though sales are going up.`
+    recommendedAction = 'Keep making enough to meet sales, but check batch sizes and how long items sit before they sell.'
   } else {
-    title = 'Review Waste Pattern'
-    recommendedAction = 'Review batch size, production scheduling, storage, and expiry handling to identify the source of the waste.'
+    title = 'Reduce Waste'
+    reason = `${wasted} — about ${s.waste_pct}% of what was made.`
+    recommendedAction = 'Check batch sizes and how long items sit before they sell.'
   }
+
+  const metrics: Record<string, number | string | null> = {
+    'Made': `${s.production_quantity_in_window} units`,
+    'Wasted': `${s.total_disposal} units`,
+  }
+  if (!isZeroProduction) metrics['Share wasted'] = `${s.waste_pct}%`
+  metrics['Value lost'] = `₱${s.disposal_value.toFixed(2)}`
 
   return {
     type: 'waste',
@@ -807,51 +844,42 @@ function buildWasteRecommendation(s: WasteSignal): PrescriptiveRecommendation {
     productId: s.product_id,
     productName: s.product_name,
     title,
-    reason: isResaleZeroProduction
-      ? `${s.product_name} is a resale item and had ${s.total_disposal} unit${s.total_disposal !== 1 ? 's' : ''} disposed worth ₱${s.disposal_value.toFixed(2)} in the last ${ANALYSIS_WINDOW_DAYS} days.`
-      : isZeroProduction
-      ? `${s.product_name} had ${s.total_disposal} unit${s.total_disposal !== 1 ? 's' : ''} disposed worth ₱${s.disposal_value.toFixed(2)}, but no matching production was logged during the analysis window.`
-      : `${s.product_name} has a ${s.waste_pct}% waste-to-production rate. The recommendation also considers the current demand and production patterns before suggesting an action.`,
+    reason,
     recommendedAction,
-    metrics: {
-      'Produced': `${s.production_quantity_in_window} units`,
-      'Total waste': `${s.total_disposal} units`,
-      'Waste rate': isZeroProduction ? 'N/A' : `${s.waste_pct}%`,
-      'Value lost': `₱${s.disposal_value.toFixed(2)}`,
-    },
+    metrics,
   }
 }
 
+// ---- Fast / slow moving ---------------------------------------------
+
 function buildFastMovingRecommendation(productId: string, productName: string, demand: DemandPattern): PrescriptiveRecommendation {
-  const priority = priorityFromPattern(demand)
   return {
     type: 'fast_moving',
-    priority,
+    priority: priorityFromPattern(demand),
     productId,
     productName,
-    title: 'Fast-Moving Product',
-    reason: `${productName} shows an increasing recent demand pattern, with the latest 3-day moving average above the 7-day moving average.`,
-    recommendedAction: 'Maintain sufficient stock and consider increasing production or replenishment to keep up with the current demand pattern.',
+    title: 'Selling Faster Than Usual',
+    reason: `${productName} has been selling more than usual (${lately(demand.ma3)}, compared to ${onAverage(demand.ma7)}).`,
+    recommendedAction: 'Make sure you have enough in stock, and make more if it runs low.',
     metrics: {},
   }
 }
 
 function buildSlowMovingRecommendation(productId: string, productName: string, demand: DemandPattern): PrescriptiveRecommendation {
-  const priority = priorityFromPattern(demand)
   const noDemand = demand.ma3 === 0 && demand.ma7 === 0
 
   return {
     type: 'slow_moving',
-    priority,
+    priority: priorityFromPattern(demand),
     productId,
     productName,
-    title: 'Slow-Moving Product',
+    title: noDemand ? 'Not Selling' : 'Selling Slower Than Usual',
     reason: noDemand
-      ? `${productName} has no recorded demand across the 7-day analysis window.`
-      : `${productName} shows a declining recent demand pattern, with the latest 3-day moving average below the 7-day moving average.`,
+      ? `${productName} has not sold at all recently.`
+      : `${productName} has been selling less than usual (${lately(demand.ma3)}, compared to ${onAverage(demand.ma7)}).`,
     recommendedAction: noDemand
-      ? 'Review whether to pause production, promotion, or continued offering of this product.'
-      : 'Consider reducing production, adjusting the batch size, or running a promotion while monitoring the demand pattern.',
+      ? 'Decide whether to keep making it, promote it, or take it off the menu.'
+      : 'Make smaller batches or run a promotion.',
     metrics: {},
   }
 }
