@@ -42,7 +42,6 @@ export default function ReservationsPage() {
   // Complete pickup modal
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completingReservation, setCompletingReservation] = useState<ReservationWithDetails | null>(null)
-  const [pickupPaymentMethod, setPickupPaymentMethod] = useState<'cash' | 'online'>('cash')
   const [completing, setCompleting] = useState(false)
 
   // Cancel modal
@@ -53,7 +52,7 @@ export default function ReservationsPage() {
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { applyFilters() }, [reservations, statusFilter, search])
   useEffect(() => { setPage(1) }, [statusFilter, search])
-  useRealtimeRefresh(['reservations', 'reservation_items'], loadReservations)
+  useRealtimeRefresh(['reservations', 'reservation_items', 'reservation_payments'], loadReservations)
 
   async function checkAuth() {
     const user = await getCurrentUser()
@@ -100,7 +99,6 @@ export default function ReservationsPage() {
 
   function openCompleteModal(reservation: ReservationWithDetails) {
     setCompletingReservation(reservation)
-    setPickupPaymentMethod('cash')
     setShowCompleteModal(true)
   }
 
@@ -108,7 +106,7 @@ export default function ReservationsPage() {
     if (!completingReservation) return
     setCompleting(true); setError('')
     try {
-      await completeReservationPickup(completingReservation.id, pickupPaymentMethod, userId)
+      await completeReservationPickup(completingReservation.id, userId)
       setSuccess('Pickup completed — sale recorded')
       setShowCompleteModal(false)
       setCompletingReservation(null)
@@ -163,6 +161,19 @@ export default function ReservationsPage() {
     return <span className="text-xs font-bold px-3 py-1 rounded-full text-white" style={{ backgroundColor: s.bg }}>{s.label}</span>
   }
 
+  function getPaymentMethodLabel(method: string | null) {
+    if (method === 'cash') return { label: '💵 Cash', color: '#7B1111' }
+    if (method === 'online') return { label: '💳 Online', color: '#1a2340' }
+    return { label: '—', color: '#9CA3AF' }
+  }
+
+  // Deposit + final rows, oldest first, for a reservation's payment history
+  function getPaymentHistory(r: ReservationWithDetails) {
+    return (r.payments || []).slice().sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+  }
+
   const cashierNavLinks = [
     { href: '/pos', label: 'POS' },
     { href: '/inventory', label: 'Inventory' },
@@ -178,11 +189,6 @@ export default function ReservationsPage() {
     { href: '/reservations', label: 'Reservations', active: true },
   ]
 
-  // const Watermark = () => (
-  //   <img src="/logo-big.png" alt="" className="fixed pointer-events-none select-none"
-  //     style={{ opacity: 0.3, top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '50%', zIndex: 0 }}
-  //     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-  // )
   const Branding = () => (
     <div className="flex items-center gap-3 shrink-0">
       <span className="text-white font-black text-xl tracking-wide">IS FREDS</span>
@@ -193,10 +199,13 @@ export default function ReservationsPage() {
     </div>
   )
 
-
   const cards = (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {paginated.map((r) => (
+      {paginated.map((r) => {
+        const paymentMethod = getPaymentMethodLabel(r.payment_method)
+        const paymentHistory = getPaymentHistory(r)
+
+        return (
         <div key={r.id} className="bg-white rounded-sm overflow-hidden flex flex-col"
           style={{ boxShadow: '4px 4px 10px rgba(0,0,0,0.2)' }}>
 
@@ -239,7 +248,31 @@ export default function ReservationsPage() {
                 <span className="text-gray-500 font-bold">Balance Due at Pickup</span>
                 <span className="font-black" style={{ color: '#7B1111' }}>{peso(r.balance_amount)}</span>
               </div>
+              <div className="flex justify-between text-xs border-t border-gray-200 pt-1 mt-1">
+                <span className="text-gray-500 font-bold">Payment Method</span>
+                <span className="font-black" style={{ color: paymentMethod.color }}>{paymentMethod.label}</span>
+              </div>
             </div>
+
+            {/* Payment history — deposit + final, as they're received */}
+            {paymentHistory.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-bold text-gray-500">Payment History</p>
+                {paymentHistory.map(p => (
+                  <div key={p.id} className="flex justify-between items-center text-xs px-3 py-1.5 rounded-sm bg-green-50 border border-green-100">
+                    <span className="font-bold text-green-700">
+                      {p.payment_type === 'deposit' ? 'Deposit received' : 'Final payment received'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-green-700">{peso(p.amount)}</span>
+                      <span className="text-gray-400">
+                        {formatPHT(p.created_at, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {r.notes && <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2">{r.notes}</p>}
             {r.status === 'cancelled' && r.cancellation_reason && (
@@ -281,7 +314,8 @@ export default function ReservationsPage() {
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 
@@ -358,21 +392,21 @@ export default function ReservationsPage() {
             <div className="flex justify-between text-xs"><span className="text-gray-500">Already Paid (fee)</span><span className="font-bold text-green-600">{peso(completingReservation.fee_amount)}</span></div>
             <div className="flex justify-between text-sm font-black border-t border-gray-200 pt-1 mt-1"><span>Collect Now</span><span style={{ color: '#7B1111' }}>{peso(completingReservation.balance_amount)}</span></div>
           </div>
+
+          {/* Payment method is fixed at booking — same method used for deposit and balance */}
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1">Payment Method for Balance</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setPickupPaymentMethod('cash')}
-                className="py-2 rounded-sm text-xs font-bold border-2 transition-colors"
-                style={pickupPaymentMethod === 'cash' ? { borderColor: '#7B1111', backgroundColor: '#7B1111', color: 'white' } : { borderColor: '#e5e7eb', color: '#374151' }}>
-                💵 Cash
-              </button>
-              <button onClick={() => setPickupPaymentMethod('online')}
-                className="py-2 rounded-sm text-xs font-bold border-2 transition-colors"
-                style={pickupPaymentMethod === 'online' ? { borderColor: '#1a2340', backgroundColor: '#1a2340', color: 'white' } : { borderColor: '#e5e7eb', color: '#374151' }}>
-                💳 Online
-              </button>
+            <label className="block text-xs font-bold text-gray-500 mb-1">Payment Method</label>
+            <div className="px-3 py-2 rounded-sm border-2 text-xs font-bold flex items-center justify-between"
+              style={{
+                borderColor: completingReservation.payment_method === 'cash' ? '#7B1111' : '#1a2340',
+                color: completingReservation.payment_method === 'cash' ? '#7B1111' : '#1a2340',
+                backgroundColor: '#F9FAFB',
+              }}>
+              <span>{getPaymentMethodLabel(completingReservation.payment_method).label}</span>
+              <span className="text-gray-400 font-normal">Set at booking</span>
             </div>
           </div>
+
           <p className="text-xs text-gray-400">This records the full sale ({peso(completingReservation.total_amount)}), deducts stock, and updates cash register/analytics now.</p>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">

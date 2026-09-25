@@ -77,6 +77,7 @@ export default function POSPage() {
   const [restockSubmitting, setRestockSubmitting] = useState(false)
   const [restockError, setRestockError] = useState('')
   const [restockSuccess, setRestockSuccess] = useState('')
+  const [reservationPaymentMethod, setReservationPaymentMethod] = useState<'cash' | 'online'>('cash')
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -266,6 +267,7 @@ export default function POSPage() {
     setRestockSuccess('')
     setCustomerName('')
     setCustomerPhone('')
+    setReservationPaymentMethod('cash')
     setShowRestockModal(true)
   }
 
@@ -337,12 +339,12 @@ export default function POSPage() {
     setRestockSubmitting(true); setRestockError('')
     try {
       const deliveryDateUTC = restockDeliveryDate ? manilaLocalToUTC(restockDeliveryDate) : undefined
-      const reservation = await createReservation(items, customerName.trim(), userId, {
+      const reservation = await createReservation(items, customerName.trim(), userId, reservationPaymentMethod, {
         customerPhone: customerPhone.trim() || undefined,
         neededBy: deliveryDateUTC,
         notes: restockOrderNotes || undefined,
       })
-      setRestockSuccess(`Reservation created — fee of ₱${reservation.fee_amount.toFixed(2)} collected, balance ₱${reservation.balance_amount.toFixed(2)} due at pickup`)
+      setRestockSuccess(`Reservation created — ${reservationPaymentMethod === 'cash' ? 'cash' : 'online'} fee of ₱${reservation.fee_amount.toFixed(2)} collected, balance ₱${reservation.balance_amount.toFixed(2)} due at pickup`)
       setTimeout(() => { setShowRestockModal(false); setRestockSuccess(''); setCustomerName(''); setCustomerPhone('') }, 2500)
     } catch (err: any) {
       setRestockError(err.message || 'Failed to create reservation')
@@ -865,6 +867,28 @@ export default function POSPage() {
                       placeholder="e.g., Customer reservation for tomorrow"
                       className="w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-gray-400" />
                   </div>
+                </div>
+
+                {/* Deposit payment method */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Deposit Payment Method</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setReservationPaymentMethod('cash')}
+                      className="py-2 rounded-sm text-xs font-bold border-2 transition-colors"
+                      style={reservationPaymentMethod === 'cash'
+                        ? { borderColor: '#7B1111', backgroundColor: '#7B1111', color: 'white' }
+                        : { borderColor: '#e5e7eb', color: '#374151' }
+                      }>💵 Cash</button>
+                    <button type="button" onClick={() => setReservationPaymentMethod('online')}
+                      className="py-2 rounded-sm text-xs font-bold border-2 transition-colors"
+                      style={reservationPaymentMethod === 'online'
+                        ? { borderColor: '#1a2340', backgroundColor: '#1a2340', color: 'white' }
+                        : { borderColor: '#e5e7eb', color: '#374151' }
+                      }>💳 Online</button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    The balance at pickup will be collected the same way — {reservationPaymentMethod === 'cash' ? 'cash' : 'online'}.
+                  </p>
                 </div>
 
                 {/* Reservation fee/balance preview */}

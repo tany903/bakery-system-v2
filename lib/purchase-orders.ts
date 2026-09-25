@@ -319,7 +319,6 @@ export async function receivePurchaseOrder(
 
   if (poError || !po) throw new Error('Purchase order not found')
 
-  // Update each item's received quantity
   for (const receipt of itemReceipts) {
     const item = (po as any).items.find((i: PurchaseOrderItem) => i.id === receipt.item_id)
     if (!item) continue
@@ -329,7 +328,6 @@ export async function receivePurchaseOrder(
       .update({ quantity_received: receipt.quantity_received })
       .eq('id', receipt.item_id)
 
-    // Add to ingredient stock
     if (item.ingredient_id && receipt.quantity_received > 0) {
       await adjustIngredientStock(
         item.ingredient_id,
@@ -340,12 +338,10 @@ export async function receivePurchaseOrder(
     }
   }
 
-  // Determine new status
   const totalOrdered = (po as any).items.reduce((sum: number, i: PurchaseOrderItem) => sum + Number(i.quantity_ordered), 0)
   const totalReceived = itemReceipts.reduce((sum, r) => sum + r.quantity_received, 0)
   const newStatus = totalReceived >= totalOrdered ? 'received' : 'partially_received'
 
-  // Create expense entry for the received amount
   const receivedAmount = itemReceipts.reduce((sum, receipt) => {
     const item = (po as any).items.find((i: PurchaseOrderItem) => i.id === receipt.item_id)
     return sum + (item ? receipt.quantity_received * Number(item.unit_cost) : 0)

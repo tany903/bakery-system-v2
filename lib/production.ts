@@ -130,7 +130,6 @@ export async function getTodaysProductionStats(): Promise<ProductionStats> {
     productionSessions: records?.length || 0,
     mostProducedProduct: null,
   }
-
   if (!records || records.length === 0) return stats
 
   const productTotals: { [key: string]: { name: string; quantity: number } } = {}
@@ -143,11 +142,9 @@ export async function getTodaysProductionStats(): Promise<ProductionStats> {
   })
 
   stats.uniqueProducts = Object.keys(productTotals).length
-
   const arr = Object.values(productTotals)
   if (arr.length > 0) {
     stats.mostProducedProduct = arr.reduce((prev, curr) => prev.quantity > curr.quantity ? prev : curr)
   }
-
   return stats
 }

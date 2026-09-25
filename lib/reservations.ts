@@ -11,6 +11,16 @@ export interface ReservationItem {
   created_at: string
 }
 
+export interface ReservationPayment {
+  id: string
+  reservation_id: string
+  payment_type: 'deposit' | 'final'
+  amount: number
+  received_by: string
+  created_at: string
+  received_by_profile?: { full_name: string } | null
+}
+
 export interface ReservationWithDetails {
   id: string
   customer_name: string
@@ -30,6 +40,7 @@ export interface ReservationWithDetails {
   created_at: string
   updated_at: string
   items: ReservationItem[]
+  payments: ReservationPayment[]
   created_by_profile?: { full_name: string } | null
   completed_by_profile?: { full_name: string } | null
 }
@@ -42,13 +53,19 @@ export interface NewReservationItem {
 }
 
 // =============================================
-// CREATE RESERVATION (fee collected now, at booking)
+// CREATE RESERVATION
+// Booking + items + deposit payment record are created atomically via
+// the create_reservation_with_deposit() Postgres function, so the
+// deposit is recorded the moment the order is placed — never only at
+// pickup. payment_method is fixed here and reused for the final payment
+// at pickup, since both payments always use the same method.
 // =============================================
 
 export async function createReservation(
   items: NewReservationItem[],
   customerName: string,
   createdBy: string,
+  paymentMethod: 'cash' | 'online',
   options: {
     customerPhone?: string
     neededBy?: string
@@ -57,47 +74,27 @@ export async function createReservation(
 ): Promise<ReservationWithDetails> {
   if (!items || items.length === 0) throw new Error('At least one item is required')
 
-  const totalAmount = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0)
-  const feeAmount = Math.round(totalAmount * 0.5 * 100) / 100
-  const balanceAmount = Math.round((totalAmount - feeAmount) * 100) / 100
+  const { data: reservationId, error } = await supabase.rpc(
+    'create_reservation_with_deposit',
+    {
+      p_customer_name: customerName,
+      p_customer_phone: options.customerPhone || null,
+      p_needed_by: options.neededBy || null,
+      p_notes: options.notes || null,
+      p_payment_method: paymentMethod,
+      p_created_by: createdBy,
+      p_items: items.map(i => ({
+        product_id: i.product_id,
+        product_name: i.product_name,
+        quantity: i.quantity,
+        unit_price: i.unit_price,
+      })),
+    }
+  )
 
-  const { data: reservation, error: resError } = await supabase
-    .from('reservations')
-    .insert({
-      customer_name: customerName,
-      customer_phone: options.customerPhone || null,
-      status: 'pending',
-      needed_by: options.neededBy || null,
-      total_amount: totalAmount,
-      fee_amount: feeAmount,
-      balance_amount: balanceAmount,
-      notes: options.notes || null,
-      created_by: createdBy,
-    })
-    .select()
-    .single()
+  if (error) throw new Error(error.message || 'Failed to create reservation')
 
-  if (resError) throw resError
-
-  const itemRows = items.map(item => ({
-    reservation_id: reservation.id,
-    product_id: item.product_id,
-    product_name_snapshot: item.product_name,
-    quantity: item.quantity,
-    unit_price_snapshot: item.unit_price,
-    subtotal: item.quantity * item.unit_price,
-  }))
-
-  const { error: itemsError } = await supabase
-    .from('reservation_items')
-    .insert(itemRows)
-
-  if (itemsError) {
-    await supabase.from('reservations').delete().eq('id', reservation.id)
-    throw itemsError
-  }
-
-  return getReservationById(reservation.id) as Promise<ReservationWithDetails>
+  return getReservationById(reservationId as string) as Promise<ReservationWithDetails>
 }
 
 // =============================================
@@ -110,27 +107,14 @@ export async function getAllReservations(): Promise<ReservationWithDetails[]> {
     .select(`
       *,
       items:reservation_items (*),
+      payments:reservation_payments (
+        *,
+        received_by_profile:profiles!reservation_payments_received_by_fkey (full_name)
+      ),
       created_by_profile:profiles!reservations_created_by_fkey (full_name),
       completed_by_profile:profiles!reservations_completed_by_fkey (full_name)
     `)
     .order('created_at', { ascending: false })
-
-  if (error) throw error
-  return (data as unknown as ReservationWithDetails[]) || []
-}
-
-// Orders that still need to be picked up (pending or ready) and have a pickup
-// time set, soonest first. Used by the production page for pickup alarms.
-export async function getUpcomingReservations(): Promise<ReservationWithDetails[]> {
-  const { data, error } = await supabase
-    .from('reservations')
-    .select(`
-      *,
-      items:reservation_items (*)
-    `)
-    .in('status', ['pending', 'ready'])
-    .not('needed_by', 'is', null)
-    .order('needed_by', { ascending: true })
 
   if (error) throw error
   return (data as unknown as ReservationWithDetails[]) || []
@@ -142,6 +126,10 @@ export async function getReservationById(id: string): Promise<ReservationWithDet
     .select(`
       *,
       items:reservation_items (*),
+      payments:reservation_payments (
+        *,
+        received_by_profile:profiles!reservation_payments_received_by_fkey (full_name)
+      ),
       created_by_profile:profiles!reservations_created_by_fkey (full_name),
       completed_by_profile:profiles!reservations_completed_by_fkey (full_name)
     `)
@@ -167,6 +155,9 @@ export async function markReservationReady(id: string): Promise<void> {
 
 // =============================================
 // CANCEL RESERVATION
+// Note: deposit payment history is preserved (not deleted) — cancelling
+// does not erase the record that money was received. Refunding it, if
+// applicable, is a separate manual step (e.g. a cash_out entry).
 // =============================================
 
 export async function cancelReservation(id: string, reason: string): Promise<void> {
@@ -184,99 +175,21 @@ export async function cancelReservation(id: string, reason: string): Promise<voi
 
 // =============================================
 // COMPLETE PICKUP
-// Collects the remaining balance, creates the REAL sale (full amount),
-// deducts inventory, and only NOW does this hit cash register / analytics.
+// Delegates to the complete_reservation_pickup() Postgres function so
+// that recording the final payment, creating the sale + sale_items,
+// deducting stock, and marking the reservation completed all happen in
+// a single atomic transaction — no partial-failure or race conditions.
+// The payment method is not asked again here: it's fixed at booking.
 // =============================================
 
 export async function completeReservationPickup(
   reservationId: string,
-  paymentMethod: 'cash' | 'online',
   completedBy: string
 ): Promise<void> {
-  const reservation = await getReservationById(reservationId)
-  if (!reservation) throw new Error('Reservation not found')
-  if (reservation.status === 'completed') throw new Error('Reservation already completed')
-  if (reservation.status === 'cancelled') throw new Error('Reservation was cancelled')
+  const { error } = await supabase.rpc('complete_reservation_pickup', {
+    p_reservation_id: reservationId,
+    p_completed_by: completedBy,
+  })
 
-  // 1. Create the actual sale for the FULL order amount (fee + balance)
-  const { data: sale, error: saleError } = await supabase
-    .from('sales')
-    .insert({
-      payment_method: paymentMethod,
-      total_amount: reservation.total_amount,
-      cashier_id: completedBy,
-    })
-    .select()
-    .single()
-
-  if (saleError || !sale) throw new Error('Failed to create sale')
-
-  const saleItems = reservation.items.map(item => ({
-    sale_id: sale.id,
-    product_id: item.product_id,
-    product_name: item.product_name_snapshot,
-    quantity: item.quantity,
-    unit_price: item.unit_price_snapshot,
-    original_price: item.unit_price_snapshot,
-    subtotal: item.subtotal,
-    is_old_stock: false,
-    discount_pct: 0,
-  }))
-
-  const { error: itemsError } = await supabase
-    .from('sale_items')
-    .insert(saleItems)
-
-  if (itemsError) {
-    await supabase.from('sales').delete().eq('id', sale.id)
-    throw new Error('Failed to create sale items')
-  }
-
-  // 2. Deduct inventory now (stock reserved conceptually, but only moved at pickup)
-  for (const item of reservation.items) {
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', item.product_id)
-      .single()
-
-    if (productError || !product) throw new Error(`Product not found for ${item.product_name_snapshot}`)
-
-    const newStock = product.shop_current_stock - item.quantity
-    if (newStock < 0) {
-      throw new Error(`Insufficient stock for ${item.product_name_snapshot}. Available: ${product.shop_current_stock}`)
-    }
-
-    await supabase
-      .from('products')
-      .update({ shop_current_stock: newStock })
-      .eq('id', item.product_id)
-
-    await supabase.from('inventory_transactions').insert({
-      product_id: item.product_id,
-      transaction_type: 'sale',
-      location: 'shop',
-      quantity_before: product.shop_current_stock,
-      quantity_change: -item.quantity,
-      quantity_after: newStock,
-      notes: `Reservation pickup — ${reservation.customer_name}`,
-      reference_id: sale.id,
-      performed_by: completedBy,
-    })
-  }
-
-  // 3. Mark reservation completed and link the sale
-  const { error: updateError } = await supabase
-    .from('reservations')
-    .update({
-      status: 'completed',
-      payment_method: paymentMethod,
-      completed_by: completedBy,
-      completed_at: new Date().toISOString(),
-      sale_id: sale.id,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', reservationId)
-
-  if (updateError) throw updateError
+  if (error) throw new Error(error.message || 'Failed to complete pickup')
 }
