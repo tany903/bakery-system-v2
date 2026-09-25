@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { getCurrentUser, getUserProfile, signOut } from '@/lib/auth'
 import {
   getAllReservations,
+  getReservationById,
   markReservationReady,
   cancelReservation,
   completeReservationPickup,
@@ -15,6 +16,7 @@ import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
 import LogoutButton from '@/components/LogoutButton'
+import ReservationReceipt from '@/components/ReservationReceipt'
 
 const PAGE_SIZE = 9
 
@@ -76,6 +78,11 @@ export default function ReservationsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completingReservation, setCompletingReservation] = useState<ReservationWithDetails | null>(null)
   const [completing, setCompleting] = useState(false)
+
+  // Pickup receipt — shown right after a pickup is completed, so the
+  // cashier can print/hand over proof the balance + full order was paid.
+  const [showPickupReceipt, setShowPickupReceipt] = useState(false)
+  const [pickupReceiptReservation, setPickupReceiptReservation] = useState<ReservationWithDetails | null>(null)
 
   // Cancel modal
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -168,9 +175,21 @@ export default function ReservationsPage() {
     setCompleting(true); setError('')
     try {
       await completeReservationPickup(completingReservation.id, userId)
+
+      // Fetch the reservation fresh so the receipt has completed_by_profile /
+      // completed_at populated — completingReservation is the pre-completion
+      // snapshot and won't have those yet.
+      const updated = await getReservationById(completingReservation.id)
+
       setSuccess('Pickup completed — sale recorded')
       setShowCompleteModal(false)
       setCompletingReservation(null)
+
+      if (updated) {
+        setPickupReceiptReservation(updated)
+        setShowPickupReceipt(true)
+      }
+
       await loadReservations()
     } catch (err: any) {
       setError(err.message || 'Failed to complete pickup')
@@ -452,6 +471,13 @@ export default function ReservationsPage() {
                 </button>
               </div>
             )}
+
+            {r.status === 'completed' && (
+              <button onClick={() => { setPickupReceiptReservation(r); setShowPickupReceipt(true) }}
+                className="w-full text-xs font-bold py-2 rounded-sm text-white bg-gray-500 hover:bg-gray-600">
+                View Pickup Receipt
+              </button>
+            )}
           </div>
         </div>
         )
@@ -688,7 +714,7 @@ export default function ReservationsPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-400">This records the full sale ({peso(completingReservation.total_amount)}), deducts stock, and updates cash register/analytics now.</p>
+          <p className="text-xs text-gray-400">This records the full sale ({peso(completingReservation.total_amount)}), deducts stock, and updates cash register/analytics now. A pickup receipt will be shown after confirming.</p>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
           <button onClick={handleCompleteConfirm} disabled={completing}
@@ -702,6 +728,14 @@ export default function ReservationsPage() {
         </div>
       </div>
     </div>
+  ) : null
+
+  const pickupReceiptModal = showPickupReceipt && pickupReceiptReservation ? (
+    <ReservationReceipt
+      reservation={pickupReceiptReservation}
+      mode="pickup"
+      onClose={() => { setShowPickupReceipt(false); setPickupReceiptReservation(null) }}
+    />
   ) : null
 
   const cancelModal = showCancelModal ? (
@@ -756,6 +790,7 @@ export default function ReservationsPage() {
         <div className="flex flex-1 relative"><LogoWatermark />{mainContent}</div>
         {completeModal}
         {cancelModal}
+        {pickupReceiptModal}
       </div>
     )
   }
@@ -806,6 +841,7 @@ export default function ReservationsPage() {
       </div>
       {completeModal}
       {cancelModal}
+      {pickupReceiptModal}
     </div>
   )
 }
