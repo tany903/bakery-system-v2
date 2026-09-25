@@ -33,12 +33,28 @@ function manilaLocalToUTC(localStr: string): string {
   return utc.toISOString()
 }
 
-// Get current Manila time as a datetime-local string (for input min)
+// Get current Manila time as a datetime-local string (for input min).
+// Uses Intl.DateTimeFormat.formatToParts to read the Manila wall-clock
+// values directly — NOT a toLocaleString() -> new Date() round trip.
+// That round trip relies on non-ISO string parsing, which is only
+// loosely specified and behaves inconsistently across browsers
+// (notably Safari/iOS), and can silently shift the result by hours
+// or a full day depending on the browser's parser.
 function getManilaLocalNow(): string {
   const now = new Date()
-  const manila = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }))
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${manila.getFullYear()}-${pad(manila.getMonth() + 1)}-${pad(manila.getDate())}T${pad(manila.getHours())}:${pad(manila.getMinutes())}`
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now)
+
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? '00'
+
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
 }
 
 export default function POSPage() {
