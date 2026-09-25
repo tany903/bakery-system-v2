@@ -7,9 +7,17 @@ interface ReservationReceiptProps {
   reservation: ReservationWithDetails
   // 'deposit' — printed right after booking, when the fee/deposit is collected.
   // 'pickup'  — printed after the customer picks up and pays the balance.
+  //             This is the official receipt for the FULL order, so it
+  //             carries the VAT breakdown, same as the POS Receipt.
   mode: 'deposit' | 'pickup'
   onClose: () => void
 }
+
+// Same rate/formula as components/Receipt.tsx: prices are VAT-inclusive,
+// so VATable Sales = Total ÷ 1.12 and VAT = Total − VATable Sales. Kept in
+// sync with Receipt.tsx intentionally — if that rate ever changes, update
+// both.
+const VAT_RATE = 0.12
 
 function peso(n: number) {
   return `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -27,6 +35,7 @@ export default function ReservationReceipt({ reservation, mode, onClose }: Reser
 
   const r = reservation
   const isDeposit = mode === 'deposit'
+  const isPickup = mode === 'pickup'
 
   // The staff member and timestamp relevant to *this* receipt — booking
   // staff/time for the deposit receipt, completing staff/time for pickup.
@@ -36,6 +45,13 @@ export default function ReservationReceipt({ reservation, mode, onClose }: Reser
   const eventDate = isDeposit ? r.created_at : (r.completed_at || new Date().toISOString())
 
   const paymentLabel = r.payment_method === 'cash' ? 'CASH' : r.payment_method === 'online' ? 'ONLINE' : '—'
+
+  // The pickup receipt is the official receipt for the full order, so it
+  // breaks the order's total into VATable Sales + VAT, same as a normal
+  // POS sale. The deposit receipt is not an official sale receipt yet
+  // (no sale row exists until pickup), so it carries no VAT breakdown.
+  const netAmount = r.total_amount / (1 + VAT_RATE)
+  const vatAmount = r.total_amount - netAmount
 
   const handlePrint = () => {
     const printContent = receiptRef.current
@@ -82,6 +98,12 @@ export default function ReservationReceipt({ reservation, mode, onClose }: Reser
             .summary-line {
               margin-top: 6px;
               font-size: 13px;
+            }
+            .vat-breakdown {
+              margin-top: 8px;
+              padding-top: 8px;
+              border-top: 1px dashed #000;
+              font-size: 12px;
             }
             .total {
               margin-top: 10px;
@@ -212,6 +234,24 @@ export default function ReservationReceipt({ reservation, mode, onClose }: Reser
               </>
             )}
           </div>
+
+          {/* VAT Breakdown — pickup only. This is the official receipt for
+              the full order (the sale is created at pickup), so it carries
+              the same VATable Sales / VAT split as a normal POS receipt,
+              computed on the full order total. The deposit receipt has no
+              VAT breakdown since no sale exists yet at booking time. */}
+          {isPickup && (
+            <div className="vat-breakdown space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span style={{ color: '#555555' }}>VATable Sales:</span>
+                <span style={{ color: '#111111' }}>{peso(netAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: '#555555' }}>VAT (12%):</span>
+                <span style={{ color: '#111111' }}>{peso(vatAmount)}</span>
+              </div>
+            </div>
+          )}
 
           {/* Total */}
           <div className="total border-t-2 border-gray-800 pt-4 mt-4">

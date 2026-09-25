@@ -8,6 +8,7 @@ import { getAllProducts, getAllCategories } from '@/lib/products'
 import {
   createReservation,
   type NewReservationItem,
+  type ReservationWithDetails,
 } from '@/lib/reservations'
 import {
   createSale, getTodaysSalesStats, getMaxDiscountPct, getItemSubtotal, getEffectivePrice,
@@ -17,6 +18,7 @@ import {
 import type { Product } from '@/lib/supabase'
 import ProductGrid from '@/components/ProductGrid'
 import Receipt from '@/components/Receipt'
+import ReservationReceipt from '@/components/ReservationReceipt'
 import CashRegisterWidget from '@/components/CashRegisterWidget'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import { LogoSmall, LogoWatermark } from '@/components/Logo'
@@ -57,6 +59,25 @@ function getManilaLocalNow(): string {
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
 }
 
+// Manila-local calendar date (YYYY-MM-DD) for an instant — day boundaries
+// only, no time-of-day component.
+function manilaDateOnly(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(d)
+}
+
+// Whole calendar days between two instants, counted by Manila-local date —
+// NOT by dividing milliseconds by 24h. Dividing raw ms rounds 47h59m down
+// to "1 day away", which reads as "Tomorrow" even when the picked date is
+// two calendar days out. Comparing actual calendar dates avoids that
+// rounding artifact and matches how a person would count it.
+function calendarDaysBetweenManila(from: Date, to: Date): number {
+  const [fy, fm, fd] = manilaDateOnly(from).split('-').map(Number)
+  const [ty, tm, td] = manilaDateOnly(to).split('-').map(Number)
+  const fromUTC = Date.UTC(fy, fm - 1, fd)
+  const toUTC = Date.UTC(ty, tm - 1, td)
+  return Math.round((toUTC - fromUTC) / (1000 * 60 * 60 * 24))
+}
+
 export default function POSPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -92,8 +113,12 @@ export default function POSPage() {
   const [restockDeliveryDate, setRestockDeliveryDate] = useState('')
   const [restockSubmitting, setRestockSubmitting] = useState(false)
   const [restockError, setRestockError] = useState('')
-  const [restockSuccess, setRestockSuccess] = useState('')
   const [reservationPaymentMethod, setReservationPaymentMethod] = useState<'cash' | 'online'>('cash')
+
+  // Deposit receipt — shown right after an advance order is booked, so the
+  // cashier can print/hand over proof the deposit was paid.
+  const [showDepositReceipt, setShowDepositReceipt] = useState(false)
+  const [depositReceiptReservation, setDepositReceiptReservation] = useState<ReservationWithDetails | null>(null)
 
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -280,7 +305,6 @@ export default function POSPage() {
     setRestockOrderNotes('')
     setRestockDeliveryDate('')
     setRestockError('')
-    setRestockSuccess('')
     setCustomerName('')
     setCustomerPhone('')
     setReservationPaymentMethod('cash')
@@ -324,14 +348,15 @@ export default function POSPage() {
     const now = new Date()
     const diffMs = due.getTime() - now.getTime()
     const diffHours = diffMs / (1000 * 60 * 60)
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    // Calendar-day gap (Manila-local), not raw ms/24h — see calendarDaysBetweenManila.
+    const diffDays = calendarDaysBetweenManila(now, due)
     const timeStr = due.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })
     const dateStr = due.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' })
 
     if (diffMs < 0)       return { label: `Overdue — ${dateStr} ${timeStr}`,                    color: '#EF4444', bg: '#FEE2E2' }
     if (diffHours <= 3)   return { label: `Needed Soon — by ${timeStr}`,                        color: '#DC2626', bg: '#FEE2E2' }
-    if (diffHours <= 24)  return { label: `Needed Today — by ${timeStr}`,                       color: '#DC2626', bg: '#FEE2E2' }
-    if (diffDays <= 1)    return { label: `Needed Tomorrow — by ${timeStr}`,                    color: '#D97706', bg: '#FEF3C7' }
+    if (diffDays === 0)   return { label: `Needed Today — by ${timeStr}`,                       color: '#DC2626', bg: '#FEE2E2' }
+    if (diffDays === 1)   return { label: `Needed Tomorrow — by ${timeStr}`,                    color: '#D97706', bg: '#FEF3C7' }
     if (diffDays <= 3)    return { label: `Needed in ${diffDays}d — by ${timeStr}`,             color: '#D97706', bg: '#FEF3C7' }
     return                { label: `Needed by ${dateStr} ${timeStr}`,                           color: '#6B7280', bg: '#F3F4F6' }
   }
@@ -360,8 +385,16 @@ export default function POSPage() {
         neededBy: deliveryDateUTC,
         notes: restockOrderNotes || undefined,
       })
-      setRestockSuccess(`Reservation created — ${reservationPaymentMethod === 'cash' ? 'cash' : 'online'} fee of ₱${reservation.fee_amount.toFixed(2)} collected, balance ₱${reservation.balance_amount.toFixed(2)} due at pickup`)
-      setTimeout(() => { setShowRestockModal(false); setRestockSuccess(''); setCustomerName(''); setCustomerPhone('') }, 2500)
+
+      // Close the booking modal and immediately show the deposit receipt,
+      // the same way the reservations page shows the pickup receipt right
+      // after completing a pickup.
+      setShowRestockModal(false)
+      setCustomerName('')
+      setCustomerPhone('')
+      setDepositReceiptReservation(reservation)
+      setShowDepositReceipt(true)
+      await loadData()
     } catch (err: any) {
       setRestockError(err.message || 'Failed to create reservation')
     } finally { setRestockSubmitting(false) }
@@ -767,7 +800,6 @@ export default function POSPage() {
             <form onSubmit={handleRestockSubmit} className="flex flex-col flex-1 overflow-hidden">
               <div className="px-6 py-4 space-y-3 overflow-y-auto flex-1">
                 {restockError && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-red-500">{restockError}</div>}
-                {restockSuccess && <div className="px-3 py-2 rounded-sm text-xs font-semibold text-white bg-green-500">{restockSuccess}</div>}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
@@ -942,9 +974,18 @@ export default function POSPage() {
         </div>
       )}
 
-      {/* Receipt Modal */}
+      {/* Receipt Modal — normal POS sale */}
       {showReceipt && lastSale && (
         <Receipt sale={lastSale} onClose={() => { setShowReceipt(false); setLastSale(null) }} />
+      )}
+
+      {/* Deposit Receipt Modal — right after an advance order is booked */}
+      {showDepositReceipt && depositReceiptReservation && (
+        <ReservationReceipt
+          reservation={depositReceiptReservation}
+          mode="deposit"
+          onClose={() => { setShowDepositReceipt(false); setDepositReceiptReservation(null) }}
+        />
       )}
     </div>
   )
