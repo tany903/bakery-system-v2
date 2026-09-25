@@ -45,6 +45,18 @@ function manilaDayEndISO(dateStr: string): string {
   return new Date(`${dateStr}T23:59:59.999+08:00`).toISOString()
 }
 
+// One row per reservation for the manager report: deposit and final are
+// columns, not separate lines. A reservation starts "Awaiting Balance"
+// (deposit only) and becomes "Completed" in place once the final payment
+// lands — no second row is added.
+type GroupedPaymentRow = {
+  reservationId: string
+  customer: string
+  method: string | null
+  deposit: ReservationPaymentWithDetails | null
+  final: ReservationPaymentWithDetails | null
+}
+
 export default function ReservationsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -255,15 +267,38 @@ export default function ReservationsPage() {
     return acc
   }, {} as Record<string, { deposit: number; final: number; count: number }>)
 
+  // Group the raw deposit/final rows into one row per reservation.
+  const groupedHistory: GroupedPaymentRow[] = Object.values(
+    filteredHistory.reduce((acc, p) => {
+      const id = p.reservation_id
+      if (!acc[id]) {
+        acc[id] = {
+          reservationId: id,
+          customer: p.reservation?.customer_name || '—',
+          method: p.reservation?.payment_method ?? null,
+          deposit: null,
+          final: null,
+        }
+      }
+      if (p.payment_type === 'deposit') acc[id].deposit = p
+      else acc[id].final = p
+      return acc
+    }, {} as Record<string, GroupedPaymentRow>)
+  ).sort((a, b) => {
+    const aTime = new Date(a.final?.created_at || a.deposit?.created_at || 0).getTime()
+    const bTime = new Date(b.final?.created_at || b.deposit?.created_at || 0).getTime()
+    return bTime - aTime
+  })
+
   function exportHistoryCSV() {
-    const header = ['Date', 'Customer', 'Type', 'Amount', 'Method', 'Received By']
-    const rows = filteredHistory.map(p => [
-      formatPHT(p.created_at, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      p.reservation?.customer_name || '',
-      p.payment_type === 'deposit' ? 'Deposit' : 'Final',
-      Number(p.amount).toFixed(2),
-      p.reservation?.payment_method || '',
-      p.received_by_profile?.full_name || '',
+    const header = ['Customer', 'Deposit', 'Final', 'Status', 'Method', 'Received By']
+    const rows = groupedHistory.map(g => [
+      g.customer,
+      g.deposit ? Number(g.deposit.amount).toFixed(2) : '',
+      g.final ? Number(g.final.amount).toFixed(2) : '',
+      g.final ? 'Completed' : 'Awaiting Balance',
+      g.method || '',
+      (g.final || g.deposit)?.received_by_profile?.full_name || '',
     ])
     const csv = [header, ...rows]
       .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
@@ -524,7 +559,7 @@ export default function ReservationsPage() {
             {cashierOptions.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <button onClick={exportHistoryCSV} disabled={filteredHistory.length === 0}
+        <button onClick={exportHistoryCSV} disabled={groupedHistory.length === 0}
           className="text-xs font-bold px-4 py-2 rounded-sm text-white disabled:opacity-40 ml-auto"
           style={{ backgroundColor: '#10B981' }}>
           Export CSV
@@ -535,7 +570,7 @@ export default function ReservationsPage() {
 
       {historyLoading ? (
         <div className="text-center py-16 text-gray-500 font-bold">Loading...</div>
-      ) : filteredHistory.length === 0 ? (
+      ) : groupedHistory.length === 0 ? (
         <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
           <div className="text-5xl mb-3">🧾</div>
           <p className="text-lg font-bold text-gray-600">No payments in this range</p>
@@ -584,29 +619,39 @@ export default function ReservationsPage() {
           </div>
 
           <div className="bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
-            <p className="text-xs font-bold text-gray-500 mb-2">All Payments ({filteredHistory.length})</p>
+            <p className="text-xs font-bold text-gray-500 mb-2">Reservations ({groupedHistory.length})</p>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-100">
-                  <th className="py-1.5">Date</th>
                   <th className="py-1.5">Customer</th>
-                  <th className="py-1.5">Type</th>
-                  <th className="py-1.5">Amount</th>
+                  <th className="py-1.5">Deposit</th>
+                  <th className="py-1.5">Final</th>
+                  <th className="py-1.5">Status</th>
                   <th className="py-1.5">Method</th>
                   <th className="py-1.5">Received By</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredHistory.map(p => (
-                  <tr key={p.id} className="border-b border-gray-50">
-                    <td className="py-1.5 text-gray-500">{formatPHT(p.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="py-1.5 font-bold text-gray-800">{p.reservation?.customer_name || '—'}</td>
-                    <td className="py-1.5 font-semibold text-gray-800">{p.payment_type === 'deposit' ? 'Deposit' : 'Final'}</td>
-                    <td className="py-1.5 font-bold text-green-600">{peso(p.amount)}</td>
-                    <td className="py-1.5 font-semibold text-gray-800">{getPaymentMethodLabel(p.reservation?.payment_method ?? null).label}</td>
-                    <td className="py-1.5 text-gray-500">{p.received_by_profile?.full_name || '—'}</td>
-                  </tr>
-                ))}
+                {groupedHistory.map(g => {
+                  const isComplete = !!g.final
+                  return (
+                    <tr key={g.reservationId} className="border-b border-gray-50">
+                      <td className="py-1.5 font-bold text-gray-800">{g.customer}</td>
+                      <td className="py-1.5 text-gray-500">{g.deposit ? peso(g.deposit.amount) : '—'}</td>
+                      <td className="py-1.5 text-gray-500">{g.final ? peso(g.final.amount) : '—'}</td>
+                      <td className="py-1.5">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                          style={{ backgroundColor: isComplete ? '#10B981' : '#F5A623' }}>
+                          {isComplete ? 'Completed' : 'Awaiting Balance'}
+                        </span>
+                      </td>
+                      <td className="py-1.5 font-semibold text-gray-800">{getPaymentMethodLabel(g.method).label}</td>
+                      <td className="py-1.5 text-gray-500">
+                        {(g.final || g.deposit)?.received_by_profile?.full_name || '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
