@@ -15,6 +15,12 @@ import type { Product, UserRole } from '@/lib/supabase'
 import StockAdjustmentModal from '@/components/StockAdjustmentModal'
 import TransferStockModal from '@/components/TransferStockModal'
 import { createDisposal, PULLOUT_REASONS, OTH_REASONS, type DisposalType } from '@/lib/disposals'
+import {
+  getLatestProductionDate,
+  getFreshnessStatus,
+  FRESHNESS_LAPSE_HOURS,
+  type FreshnessStatus,
+} from '@/lib/production'
 import { signOut } from '@/lib/auth'
 import ManagerSidebar from '@/components/ManagerSidebar'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
@@ -208,7 +214,7 @@ function ProductionTopNav({ onLogout }: { onLogout: () => void }) {
 
 function DisposalModal({
   show, product, type, location, reason, setReason, quantity, setQuantity,
-  submitting, onSubmit, onCancel,
+  submitting, onSubmit, onCancel, freshness,
 }: {
   show: boolean
   product: any
@@ -221,8 +227,13 @@ function DisposalModal({
   submitting: boolean
   onSubmit: (e: React.FormEvent) => void
   onCancel: () => void
+  freshness: FreshnessStatus | null
 }) {
-  const reasons = type === 'pullout' ? PULLOUT_REASONS : OTH_REASONS
+  const lapsed = type === 'pullout' && !!freshness?.lapsed
+  const lapseReason = `Passed ${FRESHNESS_LAPSE_HOURS}-hour freshness mark`
+  const reasons = type === 'pullout'
+    ? (lapsed ? [lapseReason, ...PULLOUT_REASONS] : PULLOUT_REASONS)
+    : OTH_REASONS
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-900"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
   if (!show || !product) return null
@@ -234,6 +245,15 @@ function DisposalModal({
           <p className="text-white text-xs opacity-60 mt-0.5">{product.name} — {location} stock ({type === 'pullout' ? product.shop_current_stock || product.production_current_stock : location === 'shop' ? product.shop_current_stock : product.production_current_stock} available)</p>
         </div>
         <form onSubmit={onSubmit} className="px-6 py-5 space-y-4">
+          {lapsed && (
+            <div className="px-3 py-2 rounded-sm bg-orange-50 border border-orange-200 flex items-start gap-2">
+              <span className="text-orange-500 shrink-0">⚠️</span>
+              <p className="text-xs text-orange-700 font-semibold leading-relaxed">
+                This product passed its {FRESHNESS_LAPSE_HOURS}-hour freshness mark
+                {freshness?.hoursSinceProduction != null ? ` — last produced about ${freshness.hoursSinceProduction}h ago` : ''}.
+              </p>
+            </div>
+          )}
           <div>
             <label className={labelClass}>Reason *</label>
             <select value={reason} onChange={e => setReason(e.target.value)} required className={inputClass}>
@@ -281,6 +301,7 @@ export default function InventoryPage() {
   const [disposalReason, setDisposalReason] = useState('')
   const [disposalQuantity, setDisposalQuantity] = useState('')
   const [disposalSubmitting, setDisposalSubmitting] = useState(false)
+  const [disposalFreshness, setDisposalFreshness] = useState<FreshnessStatus | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -357,9 +378,21 @@ export default function InventoryPage() {
     setSelectedProduct(product); setShowTransferModal(true)
   }
 
-  function openDisposalModal(product: any, type: DisposalType, location: 'shop' | 'production') {
+  async function openDisposalModal(product: any, type: DisposalType, location: 'shop' | 'production') {
     setDisposalProduct(product); setDisposalType(type); setDisposalLocation(location)
     setDisposalReason(''); setDisposalQuantity(''); setShowDisposalModal(true)
+    setDisposalFreshness(null)
+
+    // Freshness only applies to pull-outs — check how long it's been since
+    // this product's most recent logged production run.
+    if (type === 'pullout') {
+      try {
+        const latest = await getLatestProductionDate(product.id)
+        setDisposalFreshness(getFreshnessStatus(latest))
+      } catch {
+        setDisposalFreshness(null)
+      }
+    }
   }
 
   async function handleDisposal(e: React.FormEvent) {
@@ -512,6 +545,7 @@ export default function InventoryPage() {
           quantity={disposalQuantity} setQuantity={setDisposalQuantity}
           submitting={disposalSubmitting} onSubmit={handleDisposal}
           onCancel={() => setShowDisposalModal(false)}
+          freshness={disposalFreshness}
         />
       </div>
     )
@@ -636,6 +670,7 @@ export default function InventoryPage() {
           quantity={disposalQuantity} setQuantity={setDisposalQuantity}
           submitting={disposalSubmitting} onSubmit={handleDisposal}
           onCancel={() => setShowDisposalModal(false)}
+          freshness={disposalFreshness}
         />
       </div>
     )
@@ -774,6 +809,7 @@ export default function InventoryPage() {
         quantity={disposalQuantity} setQuantity={setDisposalQuantity}
         submitting={disposalSubmitting} onSubmit={handleDisposal}
         onCancel={() => setShowDisposalModal(false)}
+        freshness={disposalFreshness}
       />
     </div>
   )

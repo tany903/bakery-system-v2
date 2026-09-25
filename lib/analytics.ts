@@ -401,17 +401,66 @@ export async function getBestSellingDays(): Promise<BestSellingDay[]> {
 // PRESCRIPTIVE RECOMMENDATIONS
 // =============================================
 
-// Operational recommendations use the most recent 7 calendar days for
-// pattern analysis. Restock forecasting above intentionally remains separate
-// and continues to use Simple Exponential Smoothing.
+// Operational recommendations use the most recent 7 completed calendar days
+// for pattern analysis. "Completed" means today is always excluded — a day
+// in progress has partial sales that would distort MA3/MA7 calculations.
+// Restock forecasting above intentionally remains separate and continues to
+// use Simple Exponential Smoothing (unaffected by this change).
 const ANALYSIS_WINDOW_DAYS = 7
 const SHORT_TERM_WINDOW_DAYS = 3
-// A product must have sold at least this many units in the analysis window
-// before we call it "selling faster/slower" or recommend making more/less.
-// With only a sale or two, a tiny change looks like a huge percentage jump
-// (e.g. 1 sale in 7 days -> 2 sales looks like +100%) and just creates noise.
-// Raise this number to see fewer, more meaningful recommendations.
+// A product must have sold at least this many units in the completed-day
+// analysis window before we call it "selling faster/slower".
 const MIN_UNITS_FOR_TREND = 5
+// Minimum number of completed days required before generating Fast/Slow
+// Moving recommendations. Prevents recommendations based on thin history.
+const MIN_COMPLETED_DAYS_FOR_MOVING = 7
+
+// ── Manila date helper ───────────────────────────────────────────
+// Returns today's date string in Asia/Manila time (UTC+8) in YYYY-MM-DD
+// format. Using a locale-independent approach so it works in any server TZ.
+function getManilaDateString(date: Date): string {
+  // UTC+8 offset in milliseconds
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const manilaMs = date.getTime() + MANILA_OFFSET_MS
+  return new Date(manilaMs).toISOString().split('T')[0]
+}
+
+// Returns the YYYY-MM-DD string for yesterday in Manila time.
+// This is the most recent completed calendar day.
+function getManilaYesterdayString(): string {
+  const now = new Date()
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const yesterdayManila = new Date(now.getTime() + MANILA_OFFSET_MS - 24 * 60 * 60 * 1000)
+  return yesterdayManila.toISOString().split('T')[0]
+}
+
+// ── Completed-day series builder ─────────────────────────────────
+// Builds a daily series using only COMPLETED calendar days (yesterday
+// and earlier). Today is always excluded. Used exclusively for Fast/Slow
+// Moving operational analysis — NOT for Restock/SES (which has its own
+// buildDailySeries) and NOT for Production/Waste signals.
+//
+// windowDays = how many completed days to include.
+// The series runs from (yesterday - windowDays + 1) through yesterday.
+//
+// Example: today = Sep 25, windowDays = 7
+//   series covers: Sep 18, Sep 19, Sep 20, Sep 21, Sep 22, Sep 23, Sep 24
+//   Sep 25 is NEVER included.
+function buildCompletedDaysSeries(
+  dailyQuantities: { [date: string]: number },
+  windowDays: number
+): number[] {
+  const series: number[] = []
+  // Start from yesterday (i = 1) and go back windowDays total.
+  // i=1 → yesterday, i=2 → two days ago, ..., i=windowDays → oldest day.
+  for (let i = windowDays; i >= 1; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = getManilaDateString(d)
+    series.push(Number(dailyQuantities[key] || 0))
+  }
+  return series
+}
 
 export type RecommendationPriority = 'high' | 'medium' | 'low'
 export type RecommendationType = 'production' | 'waste' | 'fast_moving' | 'slow_moving'
@@ -559,6 +608,10 @@ function priorityFromWastePattern(
   return 'low'
 }
 
+// buildOperationalDailySeries — used by Production and Waste signals only.
+// These include today because production and waste events are logged
+// throughout the day and the signals are not sensitive to partial-day bias
+// in the same way that MA3/MA7 trend comparisons are.
 function buildOperationalDailySeries(
   dailyQuantities: { [date: string]: number },
   windowDays: number
@@ -890,7 +943,7 @@ function buildSlowMovingRecommendation(productId: string, productName: string, d
     productName,
     title: noDemand ? 'Not Selling' : 'Selling Slower Than Usual',
     reason: noDemand
-      ? `${productName} has not sold at all this past week.`
+      ? `${productName} has not sold at all this past week (completed days).`
       : `${productName} has been selling less than usual (${salesSummary(demand)}).`,
     recommendedAction: noDemand
       ? 'Decide whether to keep making it, promote it, or take it off the menu.'
@@ -906,14 +959,34 @@ async function getFastAndSlowMovingRecs(): Promise<PrescriptiveRecommendation[]>
     .eq('is_archived', false)
   if (productsError) throw productsError
 
+  // The completed-day window starts MIN_COMPLETED_DAYS_FOR_MOVING + 1 days
+  // ago (to ensure we have at least 7 completed days available after
+  // excluding today). We fetch a slightly wider window so the query catches
+  // all relevant sale_items — the series builder then selects the right days.
+  const fetchWindowDays = MIN_COMPLETED_DAYS_FOR_MOVING + 1   // = 8 days back
   const windowStart = new Date()
-  windowStart.setDate(windowStart.getDate() - ANALYSIS_WINDOW_DAYS)
+  windowStart.setDate(windowStart.getDate() - fetchWindowDays)
+
+  // Exclude today's sales at the query level by capping the upper bound at
+  // the start of the current Manila calendar day (yesterday 23:59:59.999 MST).
+  const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000
+  const nowManila = new Date(Date.now() + MANILA_OFFSET_MS)
+  // Start of today in Manila time, converted back to UTC for Supabase
+  const startOfTodayManilaUTC = new Date(
+    Date.UTC(
+      nowManila.getUTCFullYear(),
+      nowManila.getUTCMonth(),
+      nowManila.getUTCDate(),
+      0, 0, 0, 0
+    ) - MANILA_OFFSET_MS
+  )
 
   const { data: saleItems, error: itemsError } = await supabase
     .from('sale_items')
     .select(`product_id, quantity, sales!inner (sale_date)`)
     .eq('sales.is_voided', false)
     .gte('sales.sale_date', windowStart.toISOString())
+    .lt('sales.sale_date', startOfTodayManilaUTC.toISOString())  // exclude today
   if (itemsError) throw itemsError
 
   const dailyByProduct: { [id: string]: { [date: string]: number } } = {}
@@ -924,16 +997,35 @@ async function getFastAndSlowMovingRecs(): Promise<PrescriptiveRecommendation[]>
       (dailyByProduct[item.product_id][date] || 0) + Number(item.quantity)
   })
 
+  // A product must have existed before the completed-day window started to
+  // avoid flagging brand-new products as slow-moving on day one.
+  const completedWindowStart = new Date()
+  completedWindowStart.setDate(completedWindowStart.getDate() - MIN_COMPLETED_DAYS_FOR_MOVING)
+
+  const yesterday = getManilaYesterdayString()
+
   const results: PrescriptiveRecommendation[] = []
 
   ;(products || [])
-    .filter(product => new Date(product.created_at) <= windowStart)
+    .filter(product => new Date(product.created_at) <= completedWindowStart)
     .forEach(product => {
-      const dailySeries = buildOperationalDailySeries(dailyByProduct[product.id] || {}, ANALYSIS_WINDOW_DAYS)
+      // Build the series from completed days only (yesterday and earlier).
+      // buildCompletedDaysSeries always excludes today by construction.
+      const dailySeries = buildCompletedDaysSeries(
+        dailyByProduct[product.id] || {},
+        MIN_COMPLETED_DAYS_FOR_MOVING  // exactly 7 completed days
+      )
+
+      // Guard: require at least MIN_COMPLETED_DAYS_FOR_MOVING data points.
+      // buildCompletedDaysSeries always returns exactly windowDays entries
+      // (zero-filled for days with no sales), so the length check is
+      // redundant but kept as an explicit safety assertion.
+      if (dailySeries.length < MIN_COMPLETED_DAYS_FOR_MOVING) return
+
       const demand = buildDemandPattern(dailySeries)
 
-      // Fast-moving requires an upward recent pattern and enough sales to
-      // trust it (a single extra sale on a slow product is not a trend).
+      // Fast-moving: requires an upward recent pattern AND enough completed-day
+      // sales to trust it (a single extra sale on a slow product is not a trend).
       if (
         demand.total7 >= MIN_UNITS_FOR_TREND &&
         demand.ma3 > demand.ma7 &&
@@ -943,8 +1035,8 @@ async function getFastAndSlowMovingRecs(): Promise<PrescriptiveRecommendation[]>
         return
       }
 
-      // Slow-moving is either no sales at all this week, or a clear drop from
-      // a product that normally sells enough to tell the difference.
+      // Slow-moving: zero completed-day sales this week, or a clear sustained
+      // drop from a product that normally sells enough to measure.
       if (
         demand.total7 === 0 ||
         (demand.total7 >= MIN_UNITS_FOR_TREND &&
@@ -967,7 +1059,7 @@ export async function getPrescriptiveRecommendations(): Promise<PrescriptiveReco
     getFastAndSlowMovingRecs(),
   ])
 
-  const results: PrescriptiveRecommendation[] = []
+  const results: PrescriptiveRecommendation[]= []
 
   productionSignals.forEach(prod => {
     results.push(buildProductionRecommendation(prod))
