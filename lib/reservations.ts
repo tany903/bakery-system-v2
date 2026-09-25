@@ -141,6 +141,34 @@ export async function getReservationById(id: string): Promise<ReservationWithDet
 }
 
 // =============================================
+// GET UPCOMING RESERVATIONS
+// Reservations with a needed_by date that aren't finished yet (pending or
+// ready) — used by the production alarm hook and the production dashboard
+// to surface pickups that are coming due. Ordered soonest-first.
+// =============================================
+
+export async function getUpcomingReservations(): Promise<ReservationWithDetails[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(`
+      *,
+      items:reservation_items (*),
+      payments:reservation_payments (
+        *,
+        received_by_profile:profiles!reservation_payments_received_by_fkey (full_name)
+      ),
+      created_by_profile:profiles!reservations_created_by_fkey (full_name),
+      completed_by_profile:profiles!reservations_completed_by_fkey (full_name)
+    `)
+    .in('status', ['pending', 'ready'])
+    .not('needed_by', 'is', null)
+    .order('needed_by', { ascending: true })
+
+  if (error) throw error
+  return (data as unknown as ReservationWithDetails[]) || []
+}
+
+// =============================================
 // MARK READY (production — informational only, no stock movement)
 // =============================================
 
