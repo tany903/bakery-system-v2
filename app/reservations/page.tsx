@@ -601,9 +601,9 @@ export default function ReservationsPage() {
                   <tr key={p.id} className="border-b border-gray-50">
                     <td className="py-1.5 text-gray-500">{formatPHT(p.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                     <td className="py-1.5 font-bold text-gray-800">{p.reservation?.customer_name || '—'}</td>
-                    <td className="py-1.5">{p.payment_type === 'deposit' ? 'Deposit' : 'Final'}</td>
+                    <td className="py-1.5 font-semibold text-gray-800">{p.payment_type === 'deposit' ? 'Deposit' : 'Final'}</td>
                     <td className="py-1.5 font-bold text-green-600">{peso(p.amount)}</td>
-                    <td className="py-1.5">{getPaymentMethodLabel(p.reservation?.payment_method ?? null).label}</td>
+                    <td className="py-1.5 font-semibold text-gray-800">{getPaymentMethodLabel(p.reservation?.payment_method ?? null).label}</td>
                     <td className="py-1.5 text-gray-500">{p.received_by_profile?.full_name || '—'}</td>
                   </tr>
                 ))}
