@@ -26,6 +26,7 @@ export interface DisposalStats {
 }
 
 const PULLOUT_REASONS = [
+  'Passed 5-hour freshness mark',
   'Mold / spoiled',
   'Dropped / damaged',
   'Wrong bake',
