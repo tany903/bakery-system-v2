@@ -7,7 +7,9 @@ import {
   markReservationReady,
   cancelReservation,
   completeReservationPickup,
+  getReservationPaymentHistory,
   type ReservationWithDetails,
+  type ReservationPaymentWithDetails,
 } from '@/lib/reservations'
 import { useRealtimeRefresh } from '@/lib/useRealtimeRefresh'
 import ManagerSidebar from '@/components/ManagerSidebar'
@@ -22,6 +24,25 @@ function formatPHT(isoStr: string, opts: Intl.DateTimeFormatOptions): string {
 
 function peso(n: number) {
   return `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function todayManilaISODate(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())
+}
+
+function daysAgoManilaISODate(days: number): string {
+  const d = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(d)
+}
+
+// A date-only picker value ("2026-09-25") means "that whole day in Manila
+// time" — convert to the actual UTC instant boundaries so the Supabase
+// gte/lte filters line up with what the manager actually sees on screen.
+function manilaDayStartISO(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00+08:00`).toISOString()
+}
+function manilaDayEndISO(dateStr: string): string {
+  return new Date(`${dateStr}T23:59:59.999+08:00`).toISOString()
 }
 
 export default function ReservationsPage() {
@@ -49,9 +70,22 @@ export default function ReservationsPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [cancelReason, setCancelReason] = useState('')
 
+  // Manager-only: Reservations vs Payment History
+  const [viewMode, setViewMode] = useState<'reservations' | 'history'>('reservations')
+  const [historyPayments, setHistoryPayments] = useState<ReservationPaymentWithDetails[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+  const [historyStartDate, setHistoryStartDate] = useState(daysAgoManilaISODate(30))
+  const [historyEndDate, setHistoryEndDate] = useState(todayManilaISODate())
+  const [historyMethodFilter, setHistoryMethodFilter] = useState<'all' | 'cash' | 'online'>('all')
+  const [historyCashierFilter, setHistoryCashierFilter] = useState('all')
+
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { applyFilters() }, [reservations, statusFilter, search])
   useEffect(() => { setPage(1) }, [statusFilter, search])
+  useEffect(() => {
+    if (userRole === 'manager' && viewMode === 'history') loadHistory()
+  }, [viewMode, historyStartDate, historyEndDate, userRole])
   useRealtimeRefresh(['reservations', 'reservation_items', 'reservation_payments'], loadReservations)
 
   async function checkAuth() {
@@ -71,6 +105,21 @@ export default function ReservationsPage() {
       setReservations(data)
     } catch {
       setError('Failed to load reservations')
+    }
+  }
+
+  async function loadHistory() {
+    setHistoryLoading(true); setHistoryError('')
+    try {
+      const data = await getReservationPaymentHistory(
+        manilaDayStartISO(historyStartDate),
+        manilaDayEndISO(historyEndDate)
+      )
+      setHistoryPayments(data)
+    } catch (err: any) {
+      setHistoryError(err.message || 'Failed to load payment history')
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -172,6 +221,62 @@ export default function ReservationsPage() {
     return (r.payments || []).slice().sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     )
+  }
+
+  // ---- Payment History tab (manager) derived data ----
+  const filteredHistory = historyPayments.filter(p => {
+    if (historyMethodFilter !== 'all' && p.reservation?.payment_method !== historyMethodFilter) return false
+    if (historyCashierFilter !== 'all' && (p.received_by_profile?.full_name || 'Unknown') !== historyCashierFilter) return false
+    return true
+  })
+
+  const cashierOptions = Array.from(
+    new Set(historyPayments.map(p => p.received_by_profile?.full_name || 'Unknown'))
+  ).sort()
+
+  const historyTotals = filteredHistory.reduce(
+    (acc, p) => {
+      const amt = Number(p.amount)
+      acc.total += amt
+      if (p.payment_type === 'deposit') acc.deposit += amt
+      else acc.final += amt
+      return acc
+    },
+    { deposit: 0, final: 0, total: 0 }
+  )
+
+  const cashierBreakdown = filteredHistory.reduce((acc, p) => {
+    const name = p.received_by_profile?.full_name || 'Unknown'
+    if (!acc[name]) acc[name] = { deposit: 0, final: 0, count: 0 }
+    const amt = Number(p.amount)
+    if (p.payment_type === 'deposit') acc[name].deposit += amt
+    else acc[name].final += amt
+    acc[name].count += 1
+    return acc
+  }, {} as Record<string, { deposit: number; final: number; count: number }>)
+
+  function exportHistoryCSV() {
+    const header = ['Date', 'Customer', 'Type', 'Amount', 'Method', 'Received By']
+    const rows = filteredHistory.map(p => [
+      formatPHT(p.created_at, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      p.reservation?.customer_name || '',
+      p.payment_type === 'deposit' ? 'Deposit' : 'Final',
+      Number(p.amount).toFixed(2),
+      p.reservation?.payment_method || '',
+      p.received_by_profile?.full_name || '',
+    ])
+    const csv = [header, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `reservation-payments_${historyStartDate}_to_${historyEndDate}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const cashierNavLinks = [
@@ -379,6 +484,137 @@ export default function ReservationsPage() {
     </div>
   )
 
+  // ---- Manager: Payment History tab content ----
+  const historyContent = (
+    <div className="relative z-10 flex-1 p-6 overflow-y-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-4xl font-black text-gray-900">Payment History</h1>
+          <p className="text-gray-700 font-medium mt-1">Deposits & final payments, for reconciliation</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 mb-5 bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1">From</label>
+          <input type="date" value={historyStartDate} max={historyEndDate}
+            onChange={e => setHistoryStartDate(e.target.value)}
+            className="text-xs px-3 py-1.5 rounded-sm border border-gray-200 text-gray-900" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1">To</label>
+          <input type="date" value={historyEndDate} min={historyStartDate} max={todayManilaISODate()}
+            onChange={e => setHistoryEndDate(e.target.value)}
+            className="text-xs px-3 py-1.5 rounded-sm border border-gray-200 text-gray-900" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1">Method</label>
+          <select value={historyMethodFilter} onChange={e => setHistoryMethodFilter(e.target.value as 'all' | 'cash' | 'online')}
+            className="text-xs px-3 py-1.5 rounded-sm border border-gray-200 text-gray-900">
+            <option value="all">All</option>
+            <option value="cash">Cash</option>
+            <option value="online">Online</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1">Cashier</label>
+          <select value={historyCashierFilter} onChange={e => setHistoryCashierFilter(e.target.value)}
+            className="text-xs px-3 py-1.5 rounded-sm border border-gray-200 text-gray-900">
+            <option value="all">All</option>
+            {cashierOptions.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </div>
+        <button onClick={exportHistoryCSV} disabled={filteredHistory.length === 0}
+          className="text-xs font-bold px-4 py-2 rounded-sm text-white disabled:opacity-40 ml-auto"
+          style={{ backgroundColor: '#10B981' }}>
+          Export CSV
+        </button>
+      </div>
+
+      {historyError && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{historyError}</div>}
+
+      {historyLoading ? (
+        <div className="text-center py-16 text-gray-500 font-bold">Loading...</div>
+      ) : filteredHistory.length === 0 ? (
+        <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+          <div className="text-5xl mb-3">🧾</div>
+          <p className="text-lg font-bold text-gray-600">No payments in this range</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-4 mb-5">
+            <div className="bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+              <p className="text-xs text-gray-500 font-bold">Deposits</p>
+              <p className="text-2xl font-black text-gray-900">{peso(historyTotals.deposit)}</p>
+            </div>
+            <div className="bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+              <p className="text-xs text-gray-500 font-bold">Final Payments</p>
+              <p className="text-2xl font-black text-gray-900">{peso(historyTotals.final)}</p>
+            </div>
+            <div className="bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+              <p className="text-xs text-gray-500 font-bold">Total Collected</p>
+              <p className="text-2xl font-black" style={{ color: '#7B1111' }}>{peso(historyTotals.total)}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-sm p-4 mb-5" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+            <p className="text-xs font-bold text-gray-500 mb-2">By Cashier</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-gray-400 border-b border-gray-100">
+                  <th className="py-1.5">Cashier</th>
+                  <th className="py-1.5">Deposits</th>
+                  <th className="py-1.5">Final</th>
+                  <th className="py-1.5">Total</th>
+                  <th className="py-1.5">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(cashierBreakdown).map(([name, b]) => (
+                  <tr key={name} className="border-b border-gray-50">
+                    <td className="py-1.5 font-bold text-gray-800">{name}</td>
+                    <td className="py-1.5">{peso(b.deposit)}</td>
+                    <td className="py-1.5">{peso(b.final)}</td>
+                    <td className="py-1.5 font-bold">{peso(b.deposit + b.final)}</td>
+                    <td className="py-1.5 text-gray-400">{b.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-white rounded-sm p-4" style={{ boxShadow: '2px 2px 7px rgba(0,0,0,0.1)' }}>
+            <p className="text-xs font-bold text-gray-500 mb-2">All Payments ({filteredHistory.length})</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-gray-400 border-b border-gray-100">
+                  <th className="py-1.5">Date</th>
+                  <th className="py-1.5">Customer</th>
+                  <th className="py-1.5">Type</th>
+                  <th className="py-1.5">Amount</th>
+                  <th className="py-1.5">Method</th>
+                  <th className="py-1.5">Received By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredHistory.map(p => (
+                  <tr key={p.id} className="border-b border-gray-50">
+                    <td className="py-1.5 text-gray-500">{formatPHT(p.created_at, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="py-1.5 font-bold text-gray-800">{p.reservation?.customer_name || '—'}</td>
+                    <td className="py-1.5">{p.payment_type === 'deposit' ? 'Deposit' : 'Final'}</td>
+                    <td className="py-1.5 font-bold text-green-600">{peso(p.amount)}</td>
+                    <td className="py-1.5">{getPaymentMethodLabel(p.reservation?.payment_method ?? null).label}</td>
+                    <td className="py-1.5 text-gray-500">{p.received_by_profile?.full_name || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   const completeModal = showCompleteModal && completingReservation ? (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-sm w-full max-w-sm" style={{ boxShadow: '4px 4px 20px rgba(0,0,0,0.4)' }}>
@@ -498,13 +734,30 @@ export default function ReservationsPage() {
       </div>
     )
   }
- // Manager view
+
+  // Manager view
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5A623' }}>
       <div className="relative z-10 w-full flex items-center justify-between px-6 py-3 shrink-0" style={{ backgroundColor: '#7B1111' }}>
-        <Branding /><LogoutButton onLogout={handleLogout} />      </div>
+        <Branding /><LogoutButton onLogout={handleLogout} />
+      </div>
       <div className="flex flex-1 relative">
-        <LogoWatermark /><ManagerSidebar />{mainContent}
+        <LogoWatermark /><ManagerSidebar />
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          <div className="px-6 pt-4 flex gap-2 shrink-0">
+            <button onClick={() => setViewMode('reservations')}
+              className="px-4 py-1.5 rounded-sm text-xs font-bold"
+              style={viewMode === 'reservations' ? { backgroundColor: '#1a2340', color: 'white' } : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              Reservations
+            </button>
+            <button onClick={() => setViewMode('history')}
+              className="px-4 py-1.5 rounded-sm text-xs font-bold"
+              style={viewMode === 'history' ? { backgroundColor: '#1a2340', color: 'white' } : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              Payment History
+            </button>
+          </div>
+          {viewMode === 'reservations' ? mainContent : historyContent}
+        </div>
       </div>
       {completeModal}
       {cancelModal}

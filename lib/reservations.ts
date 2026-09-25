@@ -45,6 +45,17 @@ export interface ReservationWithDetails {
   completed_by_profile?: { full_name: string } | null
 }
 
+// Payment row for the manager Payment History report — same shape as
+// ReservationPayment, plus the customer name and payment method pulled
+// from the parent reservation (needed for the report table/filters
+// without re-fetching every reservation).
+export interface ReservationPaymentWithDetails extends ReservationPayment {
+  reservation?: {
+    customer_name: string
+    payment_method: 'cash' | 'online' | null
+  } | null
+}
+
 export interface NewReservationItem {
   product_id: string
   product_name: string
@@ -166,6 +177,36 @@ export async function getUpcomingReservations(): Promise<ReservationWithDetails[
 
   if (error) throw error
   return (data as unknown as ReservationWithDetails[]) || []
+}
+
+// =============================================
+// GET RESERVATION PAYMENT HISTORY (manager reporting)
+// Every reservation_payments row (deposit + final) whose created_at falls
+// within [startIso, endIso], joined with the receiving cashier's name and
+// the parent reservation's customer name / payment method. Powers the
+// manager-facing Payment History tab: date-range reconciliation, per-
+// cashier breakdown, and CSV export. startIso/endIso must be full ISO
+// timestamps (the caller is responsible for turning a date-only picker
+// value into a Manila-local day boundary before calling this).
+// =============================================
+
+export async function getReservationPaymentHistory(
+  startIso: string,
+  endIso: string
+): Promise<ReservationPaymentWithDetails[]> {
+  const { data, error } = await supabase
+    .from('reservation_payments')
+    .select(`
+      *,
+      received_by_profile:profiles!reservation_payments_received_by_fkey (full_name),
+      reservation:reservations (customer_name, payment_method)
+    `)
+    .gte('created_at', startIso)
+    .lte('created_at', endIso)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data as unknown as ReservationPaymentWithDetails[]) || []
 }
 
 // =============================================
