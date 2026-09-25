@@ -573,9 +573,9 @@ export default function ReservationsPage() {
                 {Object.entries(cashierBreakdown).map(([name, b]) => (
                   <tr key={name} className="border-b border-gray-50">
                     <td className="py-1.5 font-bold text-gray-800">{name}</td>
-                    <td className="py-1.5">{peso(b.deposit)}</td>
-                    <td className="py-1.5">{peso(b.final)}</td>
-                    <td className="py-1.5 font-bold">{peso(b.deposit + b.final)}</td>
+                    <td className="py-1.5 text-gray-500">{peso(b.deposit)}</td>
+                    <td className="py-1.5 text-gray-500">{peso(b.final)}</td>
+                    <td className="py-1.5 font-bold text-gray-500">{peso(b.deposit + b.final)}</td>
                     <td className="py-1.5 text-gray-400">{b.count}</td>
                   </tr>
                 ))}
