@@ -418,12 +418,6 @@ export default function InventoryPage() {
             <h1 className="text-4xl font-black text-gray-900 mb-6">Shop Inventory</h1>
             {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error}</div>}
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <StatCard label="Total Shop Stock" value={products.reduce((sum, p) => sum + p.shop_current_stock, 0)} sub="Total units" />
-              <StatCard label="Low Stock Items" value={alerts.length} sub="Need restocking" />
-              <StatCard label="Out of Stock" value={products.filter(p => p.shop_current_stock === 0).length} sub="Products" />
-            </div>
-
             {alerts.length > 0 && (
               <div className="bg-white rounded-sm overflow-hidden mb-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
                 <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#7B1111' }}>

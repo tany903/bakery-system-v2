@@ -499,8 +499,12 @@ export default function POSPage() {
                 <p className="font-semibold">No products found</p>
               </div>
             ) : (
-              <ProductGrid products={filteredProducts} categories={categories} onAddToCart={addToCart} />
-            )}
+<ProductGrid
+  products={filteredProducts}
+  categories={categories}
+  onAddToCart={addToCart}
+  selectedProductIds={new Set(cart.map(item => item.product.id))}
+/>            )}
           </div>
         </div>
 
@@ -561,15 +565,22 @@ export default function POSPage() {
                       </div>
 
                       <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                            className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center"
-                            style={{ backgroundColor: '#F5A623', color: 'white' }}>−</button>
-                          <span className="w-8 text-center font-black text-sm text-gray-800">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                            className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center"
-                            style={{ backgroundColor: '#F5A623', color: 'white' }}>+</button>
-                        </div>
+{(() => {
+  const atMaxStock = item.quantity >= item.product.shop_current_stock
+  return (
+    <div className="flex items-center gap-2">
+      <button onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+        className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center"
+        style={{ backgroundColor: '#F5A623', color: 'white' }}>−</button>
+      <span className="w-8 text-center font-black text-sm text-gray-800">{item.quantity}</span>
+      <button onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+        disabled={atMaxStock}
+        title={atMaxStock ? 'No more stock available' : undefined}
+        className="w-9 h-9 lg:w-7 lg:h-7 rounded-sm font-black text-sm flex items-center justify-center disabled:cursor-not-allowed transition-colors"
+        style={atMaxStock ? { backgroundColor: '#D1D5DB', color: '#9CA3AF' } : { backgroundColor: '#F5A623', color: 'white' }}>+</button>
+    </div>
+  )
+})()}
                         <span className="font-black text-sm text-gray-900">₱{getItemSubtotal(item).toFixed(2)}</span>
                       </div>
 
