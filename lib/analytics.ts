@@ -936,9 +936,16 @@ function buildFastMovingRecommendation(productId: string, productName: string, d
 function buildSlowMovingRecommendation(productId: string, productName: string, demand: DemandPattern): PrescriptiveRecommendation {
   const noDemand = demand.total7 === 0
 
+  // A product that hasn't sold at all in a completed week is a stronger
+  // signal than a normal declining trend. priorityFromPattern reads an
+  // all-zero series as "stable" (0 change from a previous 0), which would
+  // otherwise score it 'low' and bury it next to genuinely stable, healthy
+  // products — so the zero-demand case overrides that here.
+  const priority: RecommendationPriority = noDemand ? 'high' : priorityFromPattern(demand)
+
   return {
     type: 'slow_moving',
-    priority: priorityFromPattern(demand),
+    priority,
     productId,
     productName,
     title: noDemand ? 'Not Selling' : 'Selling Slower Than Usual',
