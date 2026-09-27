@@ -48,9 +48,12 @@ export default function ProductsPage() {
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const PAGE_SIZE = 9
+  const [page, setPage] = useState(1)
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { if (!loading) loadProducts() }, [filterCategory, filterStock, showArchived, loading])
+useEffect(() => { setPage(1) }, [filterCategory, filterStock, showArchived, searchQuery, activeTab])
   useEffect(() => { if (!loading) loadCategories() }, [showCategoriesArchived, loading])
   useRealtimeRefresh(['products', 'categories'], () => { loadProducts(); loadCategories() })
 
@@ -164,6 +167,8 @@ export default function ProductsPage() {
 
   function flash(msg: string) { setSuccess(msg); setTimeout(() => setSuccess(''), 3000) }
   const handleLogout = async () => { await signOut(); router.push('/login') }
+const totalPages = Math.ceil(products.length / PAGE_SIZE)
+const paginatedProducts = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const inputClass = "w-full text-sm px-3 py-2 rounded-sm border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-400 text-gray-800"
   const labelClass = "block text-xs font-bold text-gray-500 mb-1"
@@ -226,29 +231,17 @@ export default function ProductsPage() {
           {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error} <button onClick={() => setError('')} className="ml-3 underline text-xs">Dismiss</button></div>}
           {success && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-green-500">{success}</div>}
 
-          {/* Stat Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Products</p>
-              <p className="text-3xl font-black text-white">{products.length}</p>
-            </div>
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Low Stock</p>
-              <p className="text-3xl font-black text-white">
-                {products.filter(p => p.shop_current_stock < p.shop_minimum_threshold || p.production_current_stock < p.production_minimum_threshold).length}
-              </p>
-            </div>
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Categories</p>
-              <p className="text-3xl font-black text-white">{categories.length}</p>
-            </div>
-            <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
-              <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Avg Price</p>
-              <p className="text-3xl font-black text-white">
-                ₱{products.length > 0 ? (products.reduce((sum, p) => sum + p.price, 0) / products.length).toFixed(2) : '0.00'}
-              </p>
-            </div>
-          </div>
+{/* Stat Cards */}
+<div className="grid grid-cols-2 gap-4 mb-6">
+  <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+    <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Total Products</p>
+    <p className="text-3xl font-black text-white">{products.length}</p>
+  </div>
+  <div className="rounded-sm p-6" style={{ backgroundColor: '#220901', boxShadow: '4px 4px 10px rgba(0,0,0,0.3)' }}>
+    <p className="text-white text-xs font-bold uppercase tracking-widest mb-2 opacity-60">Categories</p>
+    <p className="text-3xl font-black text-white">{categories.length}</p>
+  </div>
+</div>
 
           {/* Tabs + Archive toggle */}
           <div className="flex gap-2 mb-5 justify-between">
@@ -298,32 +291,57 @@ export default function ProductsPage() {
                 </select>
               </div>
 
-              {products.length === 0 ? (
-                <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-                  <div className="text-5xl mb-3">📦</div>
-                  <p className="text-lg font-bold text-gray-600">{showArchived ? 'No archived products' : 'No products found'}</p>
-                  {!showArchived && (
-                    <button onClick={() => setShowProductModal(true)}
-                      className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white"
-                      style={{ backgroundColor: '#1a2340' }}>
-                      + Add First Product
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {products.map(product => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      onEdit={showArchived ? undefined : openEditProduct}
-                      onArchive={showArchived ? undefined : handleArchiveProduct}
-                      onRestore={showArchived ? handleRestoreProduct : undefined}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
+{paginatedProducts.length === 0 ? (
+  <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+    <div className="text-5xl mb-3">📦</div>
+    <p className="text-lg font-bold text-gray-600">{showArchived ? 'No archived products' : 'No products found'}</p>
+    {!showArchived && (
+      <button onClick={() => setShowProductModal(true)}
+        className="mt-5 text-xs font-bold px-4 py-2 rounded-sm text-white"
+        style={{ backgroundColor: '#1a2340' }}>
+        + Add First Product
+      </button>
+    )}
+  </div>
+) : (
+  <>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {paginatedProducts.map(product => (
+        <ProductCard
+          key={product.id}
+          product={product}
+          onEdit={showArchived ? undefined : openEditProduct}
+          onArchive={showArchived ? undefined : handleArchiveProduct}
+          onRestore={showArchived ? handleRestoreProduct : undefined}
+        />
+      ))}
+    </div>
+    {totalPages > 1 && (
+      <div className="flex items-center justify-between mt-6">
+        <p className="text-xs text-gray-500 font-medium">
+          Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, products.length)} of {products.length} products
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+            className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+            style={{ backgroundColor: '#1a2340', color: 'white' }}>← Prev</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            <button key={p} onClick={() => setPage(p)}
+              className="px-3 py-1.5 rounded-sm text-xs font-bold"
+              style={page === p ? { backgroundColor: '#1a2340', color: 'white' } : { backgroundColor: 'white', color: '#374151', boxShadow: '2px 2px 7px rgba(0,0,0,0.15)' }}>
+              {p}
+            </button>
+          ))}
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+            className="px-3 py-1.5 rounded-sm text-xs font-bold disabled:opacity-40"
+            style={{ backgroundColor: '#1a2340', color: 'white' }}>Next →</button>
+        </div>
+      </div>
+    )}
+  </>
+)}
+
+  </>
           )}
 
           {/* ── CATEGORIES TAB ── */}
