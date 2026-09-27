@@ -526,11 +526,10 @@ export default function InventoryPage() {
             {error && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-red-500">{error}</div>}
             {success && <div className="mb-4 px-4 py-3 rounded-sm text-sm font-semibold text-white bg-green-500">{success}</div>}
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <StatCard label="Production Stock" value={products.reduce((sum, p) => sum + p.production_current_stock, 0)} sub="Total units" />
-              <StatCard label="Shop Needs Restock" value={alerts.length} sub="Low stock alerts" />
-              <StatCard label="Ready to Transfer" value={products.filter(p => p.production_current_stock > 0).length} sub="Products available" />
-            </div>
+<div className="grid grid-cols-2 gap-4 mb-6">
+  <StatCard label="Shop Needs Restock" value={alerts.length} sub="Low stock alerts" />
+  <StatCard label="Ready to Transfer" value={products.filter(p => p.production_current_stock > 0).length} sub="Products available" />
+</div>
 
             {alerts.length > 0 && (
               <div className="bg-white rounded-sm overflow-hidden mb-5" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>

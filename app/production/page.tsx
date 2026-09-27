@@ -342,33 +342,33 @@ const productionNavLinks = [
         </div>
       )}
 
-      {/* Today's Records */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xl font-black text-gray-900">Today's Production</h2>
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: '#1a2340' }}>{records.length}</span>
-        </div>
+{/* Today's Records */}
+<div className="bg-white rounded-sm overflow-hidden mb-6" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
+  <div className="flex items-center gap-2 px-5 py-4" style={{ backgroundColor: '#220901' }}>
+    <h2 className="font-bold text-white">Today's Production</h2>
+    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-white text-gray-900">{records.length}</span>
+  </div>
 
-        {records.length === 0 ? (
-          <div className="bg-white rounded-sm flex flex-col items-center justify-center py-16" style={{ boxShadow: '0px 0px 10px rgba(0,0,0,0.3)' }}>
-            <div className="text-5xl mb-3">🏭</div>
-            <p className="text-lg font-bold text-gray-600">No production recorded today</p>
-            {userRole === 'production' && (
-              <button onClick={openModal}
-                className="mt-4 px-5 py-2 rounded-sm text-sm font-bold text-white"
-                style={{ backgroundColor: '#10B981' }}>
-                Record First Batch
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {records.map(record => (
-              <ProductionRecordCard key={record.id} record={record} />
-            ))}
-          </div>
-        )}
-      </div>
+  {records.length === 0 ? (
+    <div className="flex flex-col items-center justify-center py-16">
+      <div className="text-5xl mb-3">🏭</div>
+      <p className="text-lg font-bold text-gray-600">No production recorded today</p>
+      {userRole === 'production' && (
+        <button onClick={openModal}
+          className="mt-4 px-5 py-2 rounded-sm text-sm font-bold text-white"
+          style={{ backgroundColor: '#10B981' }}>
+          Record First Batch
+        </button>
+      )}
+    </div>
+  ) : (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+      {records.map(record => (
+        <ProductionRecordCard key={record.id} record={record} />
+      ))}
+    </div>
+  )}
+</div>
 
       {/* Quick Links — production only */}
       {userRole === 'production' && (
