@@ -7,10 +7,10 @@ interface ProductGridProps {
   products: (Product & { categories?: { name: string } })[]
   categories: { id: string; name: string }[]
   onAddToCart: (product: Product) => void
+  selectedProductIds?: Set<string>
 }
 
-export default function ProductGrid({ products, categories, onAddToCart }: ProductGridProps) {
-  const [activeCategory, setActiveCategory] = useState('all')
+export default function ProductGrid({ products, categories, onAddToCart, selectedProductIds }: ProductGridProps) {  const [activeCategory, setActiveCategory] = useState('all')
 
   const filtered = activeCategory === 'all'
     ? products
@@ -54,20 +54,22 @@ export default function ProductGrid({ products, categories, onAddToCart }: Produ
           </div>
         ) : (
           filtered.map((product) => {
-            const outOfStock = product.shop_current_stock === 0
-            const lowStock = !outOfStock && product.shop_current_stock < product.shop_minimum_threshold
-            return (
-              <button
-                key={product.id}
-                onClick={() => onAddToCart(product)}
-                disabled={outOfStock}
-                className="text-left rounded-sm p-4 transition-all disabled:cursor-not-allowed flex flex-col"
-                style={{
-                  backgroundColor: 'white',
-                  boxShadow: '2px 2px 8px rgba(0,0,0,0.15)',
-                  opacity: outOfStock ? 0.5 : 1,
-                }}
-              >
+const outOfStock = product.shop_current_stock === 0
+const lowStock = !outOfStock && product.shop_current_stock < product.shop_minimum_threshold
+const isSelected = selectedProductIds?.has(product.id) ?? false
+return (
+  <button
+    key={product.id}
+    onClick={() => onAddToCart(product)}
+    disabled={outOfStock}
+    className="text-left rounded-sm p-4 transition-all disabled:cursor-not-allowed flex flex-col border-2"
+    style={{
+      backgroundColor: 'white',
+      boxShadow: isSelected ? '0 0 0 2px rgba(245,166,35,0.25), 2px 2px 8px rgba(0,0,0,0.15)' : '2px 2px 8px rgba(0,0,0,0.15)',
+      opacity: outOfStock ? 0.5 : 1,
+      borderColor: isSelected ? '#F5A623' : 'transparent',
+    }}
+  >
                 {/* Product name */}
                 <p className="font-black text-gray-900 text-sm leading-tight mb-1">{product.name}</p>
 
