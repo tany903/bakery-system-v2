@@ -67,7 +67,7 @@ return (
       backgroundColor: 'white',
       boxShadow: isSelected ? '0 0 0 2px rgba(245,166,35,0.25), 2px 2px 8px rgba(0,0,0,0.15)' : '2px 2px 8px rgba(0,0,0,0.15)',
       opacity: outOfStock ? 0.5 : 1,
-      borderColor: isSelected ? '#F5A623' : 'transparent',
+      borderColor: isSelected ? '#610505' : 'transparent',
     }}
   >
                 {/* Product name */}
